@@ -1,0 +1,52 @@
+name: Test render
+
+# Renders one real fight in local mode (nothing is uploaded to the app) on
+# every PR, so a change to the recorder or the cut is checked against the
+# live page before it runs for real.
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      match:
+        description: Match id
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MATCH: ${{ inputs.match || 'dcdff147-4871-4abc-9b5d-a3c85927f31a' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Chromium and ffmpeg
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Render
+        run: TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match "$MATCH"
+      - name: Contact sheets
+        run: |
+          cd "out/$MATCH"
+          for f in 16x9 9x16; do
+            ffprobe -v error -show_entries format=duration,size:stream=width,height,r_frame_rate -of compact "$f.mp4"
+            ffmpeg -v error -y -i "$f.mp4" -vf "fps=1,scale=480:-1,tile=6x5" -frames:v 1 "$f-sheet.png"
+          done
+          ffmpeg -v error -y -sseof -0.5 -i 16x9.mp4 -frames:v 1 16x9-last.png
+          ffmpeg -v error -y -ss 0.1 -i 9x16.mp4 -frames:v 1 9x16-first.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: render-${{ env.MATCH }}
+          path: |
+            out/
+            !out/*/rec
+          retention-days: 7
