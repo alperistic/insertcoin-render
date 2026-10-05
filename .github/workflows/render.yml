@@ -1,0 +1,66 @@
+name: Render fight videos
+
+# Free because this repo is public: GitHub-hosted runners cost nothing here.
+# The job records the public match page on insertcoin.lol and uploads through
+# signed URLs the app hands it per file, so the only secret it holds is
+# VIDEO_RENDER_SECRET, the bearer token for the app's two render routes.
+#
+# Runs every 15 minutes and on demand. A run with nothing to render ends after
+# one request.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: render
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Anything to render?
+        id: peek
+        env:
+          VIDEO_RENDER_SECRET: ${{ secrets.VIDEO_RENDER_SECRET }}
+        run: |
+          code=$(curl -s -o peek.json -w '%{http_code}' -X POST \
+            -H "authorization: Bearer $VIDEO_RENDER_SECRET" \
+            https://insertcoin.lol/api/fight-video/pending)
+          echo "pending: HTTP $code $(cat peek.json)"
+          case "$code" in
+            200)
+              if grep -q '"pending":0' peek.json; then
+                echo "run=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "run=true" >> "$GITHUB_OUTPUT"
+              fi ;;
+            # The route is not deployed yet: nothing to do, not an error.
+            404) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+            # 401 means the two VIDEO_RENDER_SECRET values differ. Fail, so it shows.
+            *) exit 1 ;;
+          esac
+      - uses: actions/checkout@v4
+        if: steps.peek.outputs.run == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.peek.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.peek.outputs.run == 'true'
+        run: npm ci
+      - name: Chromium and ffmpeg
+        if: steps.peek.outputs.run == 'true'
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Render
+        if: steps.peek.outputs.run == 'true'
+        env:
+          VIDEO_RENDER_SECRET: ${{ secrets.VIDEO_RENDER_SECRET }}
+        run: node render.mjs
