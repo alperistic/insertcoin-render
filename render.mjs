@@ -73,13 +73,13 @@ async function claimLoop() {
       const out = await renderOne(job.matchId, job.title, workDir);
       await upload(job.uploads.landscape, out.landscape);
       await upload(job.uploads.portrait, out.portrait);
-      await api("done", { matchId: job.matchId, stamp: job.stamp, ok: true });
+      await api("done", { matchId: job.matchId, claim: job.claim, ok: true });
       console.log(`${job.matchId}: done`);
     } catch (err) {
       const permanent = err instanceof NoStageError;
       const message = err instanceof Error ? err.message : String(err);
       console.error(`${job.matchId}: ${permanent ? "skipped" : "failed"}: ${message}`);
-      await api("done", { matchId: job.matchId, stamp: job.stamp, ok: false, error: message, permanent }).catch(
+      await api("done", { matchId: job.matchId, claim: job.claim, ok: false, error: message, permanent }).catch(
         (e) => console.error(`report failed: ${e.message}`),
       );
     } finally {
