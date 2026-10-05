@@ -1,0 +1,13 @@
+{
+  "name": "insertcoin-render",
+  "private": true,
+  "type": "module",
+  "description": "Renders insertcoin.lol fight replays to MP4.",
+  "scripts": {
+    "render": "node render.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.62.1"
+  }
+}
