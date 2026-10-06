@@ -1,0 +1,42 @@
+name: Reach probe (temporary)
+
+# Temporary: can a GitHub-hosted runner reach a landing Cloudflare cannot?
+on:
+  push:
+    branches: [claude/project-thread-l5ntej]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: curl
+        run: |
+          for u in https://ttrrechner.de/ https://cordinare.de/ https://atel-marketing-solutions.com/; do
+            curl -sS -o /dev/null -m 30 -A "Mozilla/5.0" -w "$u code=%{http_code} connect=%{time_connect}s total=%{time_total}s ip=%{remote_ip}\n" "$u" || echo "$u FAILED"
+          done
+          curl -sS -m 10 https://api.ipify.org; echo
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: playwright
+        run: |
+          cat > probe.mjs <<'JS'
+          import { chromium } from "playwright";
+          const b = await chromium.launch();
+          const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
+          const t0 = Date.now();
+          try {
+            await p.goto("https://ttrrechner.de/", { waitUntil: "networkidle", timeout: 30000 });
+            console.log("networkidle after", Date.now() - t0, "ms, height", await p.evaluate(() => document.documentElement.scrollHeight));
+          } catch (e) { console.log("goto failed after", Date.now() - t0, "ms:", e.message.split("\n")[0]); }
+          await b.close();
+          JS
+          node probe.mjs
