@@ -66,12 +66,12 @@ export function buildVideos(recDir, title, outDir) {
   });
   const seconds = picks.length / FPS;
 
-  // Music: cut to length, 1.5 s fade, loudness to about -14 LUFS.
+  // Music: cut to length, 1.5 s fade, quiet bed at about -28 LUFS (the old -14 drowned the fight).
   const track = path.join(recDir, "track.m4a");
   ffmpeg([
     "-stream_loop", "-1", "-i", MUSIC,
     "-t", seconds.toFixed(3),
-    "-af", `afade=t=out:st=${Math.max(0, seconds - 1.5).toFixed(3)}:d=1.5,loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000`,
+    "-af", `afade=t=out:st=${Math.max(0, seconds - 1.5).toFixed(3)}:d=1.5,loudnorm=I=-28:TP=-3:LRA=7,aresample=48000`,
     "-c:a", "aac", "-b:a", "192k", track,
   ]);
 
