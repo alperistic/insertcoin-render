@@ -87,14 +87,18 @@ export async function recordFight(pageUrl, outDir) {
     });
     await page.waitForTimeout(500);
 
+    const tClick = Date.now();
+    await page.evaluate(() => window.__rec.start());
+    await page.getByRole("button", { name: /REPLAY/ }).first().click();
+
+    // Measured after the click: starting the replay moves the page (the stage
+    // sat ~94 px higher than before the click), and a box taken earlier cut
+    // the HUD off the top of every frame.
+    await page.waitForTimeout(700);
     const box = await page.evaluate(() => {
       const r = document.querySelector(".fr-box").getBoundingClientRect();
       return { x: r.x, y: r.y, w: r.width, h: r.height };
     });
-
-    const tClick = Date.now();
-    await page.evaluate(() => window.__rec.start());
-    await page.getByRole("button", { name: /REPLAY/ }).first().click();
 
     await page.waitForFunction(() => window.__rec.end > 0, null, { timeout: MAX_FIGHT_MS, polling: 100 });
     await page.waitForTimeout(300);
