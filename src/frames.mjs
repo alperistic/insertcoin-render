@@ -28,6 +28,15 @@ export function frameSequence(frames, { start, last, hold, fps }) {
   return picks;
 }
 
+/**
+ * A screencast timestamp (seconds, real clock) in page time: the recording
+ * plays the page at `slow` times its speed (src/slowclock.js), so real time
+ * since `t0` is squeezed by that factor. `slow` 1 leaves it as it is.
+ */
+export function pageTime(t, t0, slow) {
+  return t0 + (t - t0) * slow;
+}
+
 /** Largest gap between consecutive captured frames inside the window, in seconds. */
 export function maxGap(frames, start, last) {
   const ts = frames.map((f) => f.t).filter((t) => t >= start && t <= last);

@@ -6,14 +6,25 @@
 // (only with --force-device-scale-factor in headless), and src/build.mjs
 // turns that into a steady 30 fps. Same method as the first fight video,
 // recorded by hand on 05.10.2026.
+//
+// The page plays in slow motion (src/slowclock.js, SLOW = a quarter of the
+// speed): the runner paints a 2x stage at only ~18-27 frames a second, which
+// lost every drawing that stands for one or two frames. The timestamps that
+// come back are squeezed into page time (frames.mjs pageTime), so everything
+// downstream sees a fight at normal speed.
 
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright";
+import { pageTime } from "./frames.mjs";
+
+const SLOWCLOCK = fs.readFileSync(new URL("./slowclock.js", import.meta.url), "utf8");
+/** How fast the page plays while it is recorded. 0.25 paints ~70 page frames a second on a runner. */
+export const SLOW = Number(process.env.SLOW || 0.25);
 
 const DPR = 2;
 const VIEWPORT = { width: 1280, height: 720 };
-/** Longest a fight may run before the recording gives up. Real ones are ~25 s. */
+/** Longest a fight may run (page time) before the recording gives up. Real ones are ~25-50 s. */
 const MAX_FIGHT_MS = 90_000;
 
 export class NoStageError extends Error {}
@@ -31,6 +42,7 @@ export async function recordFight(pageUrl, outDir) {
   const browser = await chromium.launch({ args: [`--force-device-scale-factor=${DPR}`] });
   try {
     const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: DPR });
+    await ctx.addInitScript({ content: `window.__SLOW_K__ = ${SLOW};\n${SLOWCLOCK}` });
     const page = await ctx.newPage();
     // ?stage=on: the stage runs even if this context had seen the fight
     // (lib/fight/stageOff.ts). A fresh context has not, so it is belt and braces.
@@ -54,8 +66,9 @@ export async function recordFight(pageUrl, outDir) {
       w.__rec = { vs: 0, end: 0 };
       const root = document.querySelector(".fr-root");
       const vs = document.querySelector(".fr-vs");
+      // The real clock (slowclock.js): the screencast stamps frames with it.
       const tick = () => {
-        const now = performance.timeOrigin + performance.now();
+        const now = w.__realNow();
         if (!w.__rec.vs && vs && Number(getComputedStyle(vs).opacity) > 0.5 && getComputedStyle(vs).visibility !== "hidden") {
           w.__rec.vs = now;
         }
@@ -87,7 +100,7 @@ export async function recordFight(pageUrl, outDir) {
     });
     await page.waitForTimeout(500);
 
-    const tClick = Date.now();
+    const tClick = Date.now(); // Node's clock, the real one
     await page.evaluate(() => window.__rec.start());
     await page.getByRole("button", { name: /REPLAY/ }).first().click();
 
@@ -100,19 +113,23 @@ export async function recordFight(pageUrl, outDir) {
       return { x: r.x, y: r.y, w: r.width, h: r.height };
     });
 
-    await page.waitForFunction(() => window.__rec.end > 0, null, { timeout: MAX_FIGHT_MS, polling: 100 });
+    await page.waitForFunction(() => window.__rec.end > 0, null, { timeout: MAX_FIGHT_MS / SLOW, polling: 100 });
     await page.waitForTimeout(300);
     await cdp.send("Page.stopScreencast");
     const marks = await page.evaluate(() => ({ vs: window.__rec.vs, end: window.__rec.end }));
 
+    // Seconds, like the screencast, squeezed into page time around the
+    // first frame. A VS card the probe never saw starts the cut just after
+    // the click, which is where it was on 05.10.
+    const t0 = frames[0]?.t ?? 0;
+    const page_ = (t) => pageTime(t, t0, SLOW);
     const meta = {
       dpr: DPR,
+      slow: SLOW,
       box,
-      frames,
-      // Seconds, like the screencast. A VS card the probe never saw starts
-      // the cut just after the click, which is where it was on 05.10.
-      tVs: (marks.vs || tClick + 190) / 1000,
-      tEnd: marks.end / 1000,
+      frames: frames.map((f) => ({ name: f.name, t: page_(f.t) })),
+      tVs: page_((marks.vs || tClick + 190 / SLOW) / 1000),
+      tEnd: page_(marks.end / 1000),
     };
     fs.writeFileSync(path.join(outDir, "meta.json"), JSON.stringify(meta));
     return meta;
