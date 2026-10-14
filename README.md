@@ -4,6 +4,8 @@ Renders [insertcoin.lol](https://insertcoin.lol) fight replays to MP4, for the d
 
 This repo is public so the GitHub Actions minutes are free. It holds no app code and no keys. The job opens the public match page in Chromium, records the replay with the CDP screencast, and cuts two files with ffmpeg:
 
+The page plays in slow motion while it is recorded (`src/slowclock.js`, a quarter of the speed by default, env `SLOW`): a runner has no GPU and paints the stage at only ~18–27 frames a second, which lost every drawing that stands for one or two frames. The timestamps are squeezed back afterwards, so both files run at normal speed, at 60 fps:
+
 - `16x9.mp4`, 1920×1080
 - `9x16.mp4`, 1080×1920, with the fighters' names above the stage and insertcoin.lol below
 
@@ -13,7 +15,7 @@ The demo music plays under both.
 
 1. Every 15 minutes (or on demand) the workflow asks the app whether any fight is waiting (`POST /api/fight-video/pending`). If none is, the run ends there.
 2. `render.mjs` claims the next fight (`POST /api/fight-video/claim`). The answer carries the match id, the fighter names, and one signed upload URL per file.
-3. It records the fight from `https://insertcoin.lol/match/<id>?stage=on`, builds both MP4s, and uploads them to the signed URLs.
+3. It records the fight (in slow motion, see above) from `https://insertcoin.lol/match/<id>?stage=on`, builds both MP4s, and uploads them to the signed URLs.
 4. It reports back (`POST /api/fight-video/done`). The app checks that both files are in the bucket before the match page offers them.
 
 A rejudged fight gets rendered again, and the old files are deleted. The app side lives in `lib/fightVideo.ts` in the insertcoin repo.

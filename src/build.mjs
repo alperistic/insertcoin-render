@@ -18,7 +18,11 @@ const ASSETS = path.join(HERE, "..", "assets");
 const FONT = path.join(ASSETS, "PressStart2P-Regular.ttf");
 const MUSIC = path.join(ASSETS, "music.m4a");
 
-const FPS = 30;
+/**
+ * 60, not 30: a move's quick drawings stand one frame (17 ms) each, and a
+ * 30 fps video showed every second one.
+ */
+const FPS = 60;
 /** How long the last frame of the fight (the winner's banner) stays up. */
 const HOLD_S = 1.0;
 /** The stage's border, in CSS px, left out of the crop. */

@@ -22,7 +22,8 @@ permissions:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Up to MAX_JOBS (5) fights at ~4 minutes each in slow motion.
+    timeout-minutes: 40
     steps:
       - name: Anything to render?
         id: peek

@@ -15,7 +15,7 @@ import { NoStageError, recordFight } from "./src/record.mjs";
 
 const APP = (process.env.APP_URL || "https://insertcoin.lol").replace(/\/+$/, "");
 const SECRET = process.env.VIDEO_RENDER_SECRET || "";
-/** Fights per run. A run is ~1 minute per fight; the rest wait for the next run. */
+/** Fights per run. A fight takes ~4 minutes in slow motion (src/slowclock.js); the rest wait for the next run. */
 const MAX_JOBS = Number(process.env.MAX_JOBS || 5);
 
 async function api(route, body) {

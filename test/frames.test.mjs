@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { frameSequence, maxGap, titleLayout } from "../src/frames.mjs";
+import { frameSequence, maxGap, pageTime, titleLayout } from "../src/frames.mjs";
 
 const at = (...ts) => ts.map((t) => ({ t }));
 
@@ -36,4 +36,10 @@ test("a long title breaks into name, vs, name", () => {
   const t = titleLayout("ATEL MARKETING SOLUTIONS", "CORDINARE ENTERPRISE CLOUD");
   assert.deepEqual(t.lines, ["ATEL MARKETING SOLUTIONS", "vs", "CORDINARE ENTERPRISE CLOUD"]);
   assert.ok(t.size * 26 <= 960);
+});
+
+test("pageTime squeezes real time since t0 by the slow factor", () => {
+  assert.equal(pageTime(14, 10, 0.25), 11);
+  assert.equal(pageTime(10, 10, 0.25), 10);
+  assert.equal(pageTime(12.5, 10, 1), 12.5);
 });
