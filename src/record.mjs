@@ -51,35 +51,53 @@ export async function recordFight(pageUrl, outDir) {
     if (!arena) throw new NoStageError("no fight stage on the page");
     await page.waitForTimeout(2500);
 
-    // REPLAY scrolls the stage into view; doing it first keeps the stage
-    // still in the frame while the recording runs.
+    // REPLAY scrolls .fr-root to the top of the window (bringStageIntoView in
+    // the app's FightReplay.tsx), smoothly and on the real clock, so the slow
+    // clock does not stretch it: ~200 ms of the page moving 94 px while the
+    // stage already shows the replay, and those frames opened every video.
+    // Putting the root there first, at once, leaves that scroll nothing to do.
     await page.evaluate(() => {
-      document.querySelector(".fr-box")?.scrollIntoView({ block: "center" });
+      document.querySelector(".fr-root")?.scrollIntoView({ block: "start", behavior: "instant" });
     });
     await page.waitForTimeout(800);
 
     // The two instants the cut is made from, stamped by the page itself on
     // the browser's clock (the same clock the screencast timestamps use):
-    // the VS card becoming visible, and the stage handing over to the end card.
+    // the VS intro starting, and the stage handing over to the end card.
+    //
+    // The intro: .fr-vs stays at opacity 1 from the last fight into the
+    // replay, so its opacity says nothing (it stamped the instant of the
+    // click). What marks the start is the left half: REPLAY puts it off the
+    // stage, then it slides back in. The cut starts on the first frame it
+    // moves again with the stage standing still, and the stage box is
+    // measured in that same frame.
     await page.evaluate(() => {
       const w = window;
-      w.__rec = { vs: 0, end: 0 };
+      w.__rec = { vs: 0, end: 0, box: null };
       const root = document.querySelector(".fr-root");
-      const vs = document.querySelector(".fr-vs");
+      const stage = document.querySelector(".fr-box");
+      const half = document.querySelector(".fr-vs-l");
+      let away = null; // the left half's x once REPLAY has put it off the stage
+      let lastY = null;
       // The real clock (slowclock.js): the screencast stamps frames with it.
       const tick = () => {
         const now = w.__realNow();
-        if (!w.__rec.vs && vs && Number(getComputedStyle(vs).opacity) > 0.5 && getComputedStyle(vs).visibility !== "hidden") {
-          w.__rec.vs = now;
+        if (!w.__rec.vs && half && stage) {
+          const r = stage.getBoundingClientRect();
+          const x = half.getBoundingClientRect().x;
+          const still = lastY !== null && Math.abs(r.y - lastY) < 0.5;
+          lastY = r.y;
+          if (away === null) {
+            if (x < r.x - 8) away = x;
+          } else if (x > away + 0.5 && still) {
+            w.__rec.vs = now;
+            w.__rec.box = { x: r.x, y: r.y, w: r.width, h: r.height };
+          }
         }
-        if (w.__rec.armed && !w.__rec.end && root?.dataset.phase === "end") w.__rec.end = now;
+        if (!w.__rec.end && root?.dataset.phase === "end") w.__rec.end = now;
         if (!w.__rec.end) requestAnimationFrame(tick);
       };
-      w.__rec.start = () => {
-        w.__rec.vs = 0;
-        w.__rec.armed = true;
-        requestAnimationFrame(tick);
-      };
+      w.__rec.start = () => requestAnimationFrame(tick);
     });
 
     const cdp = await ctx.newCDPSession(page);
@@ -104,11 +122,10 @@ export async function recordFight(pageUrl, outDir) {
     await page.evaluate(() => window.__rec.start());
     await page.getByRole("button", { name: /REPLAY/ }).first().click();
 
-    // Measured after the click: starting the replay moves the page (the stage
-    // sat ~94 px higher than before the click), and a box taken earlier cut
-    // the HUD off the top of every frame.
+    // Only for a probe that misses the intro (the VS markup changed): the box
+    // once the page has settled after the click.
     await page.waitForTimeout(700);
-    const box = await page.evaluate(() => {
+    const settled = await page.evaluate(() => {
       const r = document.querySelector(".fr-box").getBoundingClientRect();
       return { x: r.x, y: r.y, w: r.width, h: r.height };
     });
@@ -116,11 +133,13 @@ export async function recordFight(pageUrl, outDir) {
     await page.waitForFunction(() => window.__rec.end > 0, null, { timeout: MAX_FIGHT_MS / SLOW, polling: 100 });
     await page.waitForTimeout(300);
     await cdp.send("Page.stopScreencast");
-    const marks = await page.evaluate(() => ({ vs: window.__rec.vs, end: window.__rec.end }));
+    const marks = await page.evaluate(() => ({ vs: window.__rec.vs, end: window.__rec.end, box: window.__rec.box }));
+    if (!marks.vs) console.warn("VS intro not seen; cutting at a fixed delay after the click");
+    const box = marks.box ?? settled;
 
     // Seconds, like the screencast, squeezed into page time around the
-    // first frame. A VS card the probe never saw starts the cut just after
-    // the click, which is where it was on 05.10.
+    // first frame. A missed intro starts the cut at a fixed delay after the
+    // click, which is where it was on 05.10.
     const t0 = frames[0]?.t ?? 0;
     const page_ = (t) => pageTime(t, t0, SLOW);
     const meta = {
