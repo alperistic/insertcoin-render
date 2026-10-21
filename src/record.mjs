@@ -63,13 +63,16 @@ export async function recordFight(pageUrl, outDir) {
 
     // The two instants the cut is made from, stamped by the page itself on
     // the browser's clock (the same clock the screencast timestamps use):
-    // the VS intro starting, and the stage handing over to the end card.
+    // the VS card standing complete, and the stage handing over to the end card.
     //
-    // The intro: .fr-vs stays at opacity 1 from the last fight into the
-    // replay, so its opacity says nothing (it stamped the instant of the
-    // click). What marks the start is the left half: REPLAY puts it off the
-    // stage, then it slides back in. The cut starts on the first frame it
-    // moves again with the stage standing still, and the stage box is
+    // The cut opens on the finished VS card, not on its slide-in: frame 0 is
+    // the preview image on iOS and X (Alper, 21.10.2026). .fr-vs stays at
+    // opacity 1 from the last fight into the replay, so its opacity says
+    // nothing (it stamped the instant of the click). REPLAY instead puts the
+    // halves off the stage and the VS word at opacity 0, slides the halves
+    // back in, then zooms the word in. The card is complete on the first
+    // frame after that with neither the halves nor the word animating, the
+    // word fully there and the stage standing still; the stage box is
     // measured in that same frame.
     await page.evaluate(() => {
       const w = window;
@@ -77,19 +80,20 @@ export async function recordFight(pageUrl, outDir) {
       const root = document.querySelector(".fr-root");
       const stage = document.querySelector(".fr-box");
       const half = document.querySelector(".fr-vs-l");
-      let away = null; // the left half's x once REPLAY has put it off the stage
+      const word = document.querySelector('[data-fr="vs-word"]');
+      const moving = (el) => el.getAnimations().some((a) => a.playState === "running");
+      let away = false; // REPLAY has put the left half off the stage
       let lastY = null;
       // The real clock (slowclock.js): the screencast stamps frames with it.
       const tick = () => {
         const now = w.__realNow();
-        if (!w.__rec.vs && half && stage) {
+        if (!w.__rec.vs && half && word && stage) {
           const r = stage.getBoundingClientRect();
-          const x = half.getBoundingClientRect().x;
           const still = lastY !== null && Math.abs(r.y - lastY) < 0.5;
           lastY = r.y;
-          if (away === null) {
-            if (x < r.x - 8) away = x;
-          } else if (x > away + 0.5 && still) {
+          if (!away) {
+            away = half.getBoundingClientRect().x < r.x - 8;
+          } else if (still && !moving(half) && !moving(word) && Number(getComputedStyle(word).opacity) > 0.99) {
             w.__rec.vs = now;
             w.__rec.box = { x: r.x, y: r.y, w: r.width, h: r.height };
           }
@@ -122,7 +126,7 @@ export async function recordFight(pageUrl, outDir) {
     await page.evaluate(() => window.__rec.start());
     await page.getByRole("button", { name: /REPLAY/ }).first().click();
 
-    // Only for a probe that misses the intro (the VS markup changed): the box
+    // Only for a probe that misses the VS card (its markup changed): the box
     // once the page has settled after the click.
     await page.waitForTimeout(700);
     const settled = await page.evaluate(() => {
@@ -134,11 +138,11 @@ export async function recordFight(pageUrl, outDir) {
     await page.waitForTimeout(300);
     await cdp.send("Page.stopScreencast");
     const marks = await page.evaluate(() => ({ vs: window.__rec.vs, end: window.__rec.end, box: window.__rec.box }));
-    if (!marks.vs) console.warn("VS intro not seen; cutting at a fixed delay after the click");
+    if (!marks.vs) console.warn("VS card not seen; cutting at a fixed delay after the click");
     const box = marks.box ?? settled;
 
     // Seconds, like the screencast, squeezed into page time around the
-    // first frame. A missed intro starts the cut at a fixed delay after the
+    // first frame. A missed VS card starts the cut at a fixed delay after the
     // click, which is where it was on 05.10.
     const t0 = frames[0]?.t ?? 0;
     const page_ = (t) => pageTime(t, t0, SLOW);
