@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { endCardModel, even, fitPixel, parseDecided, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
+import { endCardModel, even, fitPixel, holdSpans, parseDecided, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
 
 const FPS = 60;
 const W = { stageW: 716, winW: 533, margin: 22, maxSpeed: 340, fps: FPS };
@@ -138,4 +138,33 @@ test("fitPixel fits one line of the pixel font or gives up below min", () => {
   assert.equal(fitPixel("ATEL WINS", 960, 72, 32), 72);
   assert.equal(fitPixel("TTRRECHNER WINS", 960, 72, 32), 64);
   assert.equal(fitPixel("A VERY LONG STARTUP NAME THAT GOES ON WINS", 960, 72, 32), null);
+});
+
+test("holdSpans keeps a flickering word steady for hold seconds either side", () => {
+  const times = [0, 0.1, 0.2, 0.3, 0.4, 1.5];
+  const rects = [null, [10, 0, 20, 5], null, [12, 0, 30, 5], null, null];
+  const out = holdSpans(times, rects, 0.15);
+  assert.deepEqual(out[0], [10, 0, 20, 5]);
+  assert.deepEqual(out[1], [10, 0, 20, 5]);
+  assert.deepEqual(out[2], [10, 0, 30, 5]);
+  assert.deepEqual(out[4], [12, 0, 30, 5]);
+  assert.equal(out[5], null);
+});
+
+test("a word is framed beside the fighters, or alone when both do not fit", () => {
+  // Fighters at the left; a centred word 300..420 joins on frames 60..119.
+  const track = frames(240).map((t, k) => ({ t, u: [60, 150, 260, 600], w: k >= 60 && k < 120 ? [300, 420] : null }));
+  const { x, need, snaps } = trackCrop(track, { ...W, times: frames(240) });
+  assert.ok(x[90] + W.winW >= 420 + W.margin - 1e-6, "the word is inside");
+  x.forEach((v, k) => assert.ok(contains(v, need[k], W.margin, W.winW), `frame ${k} cuts the fighters`));
+  assert.equal(snaps, 0);
+  // A word that does not fit beside them wins: the window centres on it.
+  const wide = frames(60).map((t) => ({ t, u: [60, 150, 260, 600], w: [250, 466] }));
+  const r = trackCrop(wide, { ...W, times: frames(60) });
+  assert.ok(r.x[59] <= 250 - W.margin + 1e-6 && r.x[59] + W.winW >= 466 + W.margin - 1e-6, "the word is inside");
+  // ...and the window pans into such a word, it does not hop.
+  const late = frames(180).map((t, k) => ({ t, u: [0, 150, 200, 600], w: k >= 120 ? [150, 716] : null }));
+  const l = trackCrop(late, { ...W, times: frames(180) });
+  assert.equal(l.snaps, 0);
+  assert.ok(Math.abs(l.x[179] - (433 - W.winW / 2)) < 1e-6, "centred on the word, wider than the window");
 });
