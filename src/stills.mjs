@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { fitPixel } from "./layout.mjs";
+import { fitPixel, tierLabel } from "./layout.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONT = path.join(HERE, "..", "assets", "PressStart2P-Regular.ttf");
@@ -27,6 +27,7 @@ export const C = {
   faint: "#8a8a95",
   win: "#3ecf6e",
   track: "#1e2430",
+  surface: "#0a0a0d",
 };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -75,7 +76,7 @@ export function endCardHtml(m, { w, h, domainY, domainSize, note }) {
     ? `<div class="px" style="font-size:${headSize}px;color:${C.chrome}">${esc(up(m.winner.name))} <span style="color:${C.win}">WINS</span></div>`
     : `<div class="px" style="font-size:${fitPixel(m.winner.name, room, 64, 12) ?? 12}px;color:${C.chrome}">${esc(up(m.winner.name))}</div>
        <div class="px" style="font-size:64px;color:${C.win};margin-top:24px">WINS</div>`;
-  const tier = m.tier ? `<div class="px" style="font-size:${portrait ? 28 : 28}px;color:${C.muted};margin-top:36px">${esc(m.tier)}</div>` : "";
+  const tier = m.tier ? `<div class="px" style="font-size:${portrait ? 28 : 28}px;color:${C.muted};margin-top:36px">${esc(tierLabel(m.tier))}</div>` : "";
 
   const colW = portrait ? 440 : 520;
   const scoreSize = Math.min(portrait ? 96 : 104, fitPixel(m.cols.reduce((a, c) => (c.total.length > a.length ? c.total : a), ""), colW - 40, 120, 24) ?? 24);

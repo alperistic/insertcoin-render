@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { endCardModel, even, fitPixel, holdSpans, parseDecided, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
+import { endCardModel, even, fitPixel, holdSpans, parseDecided, tierLabel, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
 
 const FPS = 60;
 const W = { stageW: 716, winW: 533, margin: 22, maxSpeed: 340, fps: FPS };
@@ -151,20 +151,25 @@ test("holdSpans keeps a flickering word steady for hold seconds either side", ()
   assert.equal(out[5], null);
 });
 
-test("a word is framed beside the fighters, or alone when both do not fit", () => {
+test("a word is framed only when it fits with both fighters; a fighter is never cut for it", () => {
   // Fighters at the left; a centred word 300..420 joins on frames 60..119.
   const track = frames(240).map((t, k) => ({ t, u: [60, 150, 260, 600], w: k >= 60 && k < 120 ? [300, 420] : null }));
-  const { x, need, snaps } = trackCrop(track, { ...W, times: frames(240) });
+  const { x, need, snaps, wordCut } = trackCrop(track, { ...W, times: frames(240) });
   assert.ok(x[90] + W.winW >= 420 + W.margin - 1e-6, "the word is inside");
   x.forEach((v, k) => assert.ok(contains(v, need[k], W.margin, W.winW), `frame ${k} cuts the fighters`));
   assert.equal(snaps, 0);
-  // A word that does not fit beside them wins: the window centres on it.
-  const wide = frames(60).map((t) => ({ t, u: [60, 150, 260, 600], w: [250, 466] }));
+  assert.equal(wordCut, 0);
+  // A word that does not fit beside them is cut, the fighters keep the window.
+  const wide = frames(60).map((t) => ({ t, u: [60, 150, 260, 600], w: [250, 700] }));
   const r = trackCrop(wide, { ...W, times: frames(60) });
-  assert.ok(r.x[59] <= 250 - W.margin + 1e-6 && r.x[59] + W.winW >= 466 + W.margin - 1e-6, "the word is inside");
-  // ...and the window pans into such a word, it does not hop.
-  const late = frames(180).map((t, k) => ({ t, u: [0, 150, 200, 600], w: k >= 120 ? [150, 716] : null }));
-  const l = trackCrop(late, { ...W, times: frames(180) });
-  assert.equal(l.snaps, 0);
-  assert.ok(Math.abs(l.x[179] - (433 - W.winW / 2)) < 1e-6, "centred on the word, wider than the window");
+  assert.equal(r.wordCut, 60);
+  r.x.forEach((v, k) => assert.ok(contains(v, r.need[k], W.margin, W.winW), `frame ${k} cuts the fighters`));
+});
+
+test("the tier reads as the stage says it", () => {
+  assert.equal(tierLabel("KO"), "K.O.");
+  assert.equal(tierLabel("TKO"), "T.K.O.");
+  assert.equal(tierLabel("KO · PERFECT"), "K.O. · PERFECT");
+  assert.equal(tierLabel("SPLIT DECISION"), "SPLIT DECISION");
+  assert.equal(tierLabel(null), null);
 });
