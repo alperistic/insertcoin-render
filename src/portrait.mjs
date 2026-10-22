@@ -15,9 +15,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { titleLayout } from "./frames.mjs";
-import { even, fitPixel, holdSpans, runs, samplesAt, stackLayout, trackCrop, unionRect } from "./layout.mjs";
+import { even, fitPixel, holdSpans, runs, samplesAt, solidColor, stackLayout, trackCrop, unionRect } from "./layout.mjs";
 import { BG, BORDER, ENCODE, FPS, TAIL, endcardGraph, endcardInput, ffmpeg } from "./build.mjs";
-import { C, endCardHtml, layerHtml, textItem } from "./stills.mjs";
+import { C, endCardHtml, layerHtml, pageHtml, textItem } from "./stills.mjs";
 
 /** The domain line under the stage, in the pixel font. */
 const DOMAIN_SIZE = 32;
@@ -111,10 +111,39 @@ const SPEED_STAGE = 700;
 const WORD_HOLD = 0.35;
 /**
  * Our HUD, drawn opaque over the window's top band where the stage's own
- * (cropped) HUD is, output px from the band's top. Sized for 390 px
- * playback: names 32 px, bars 20 px at 1080 wide.
+ * (cropped) HUD is, output px from the band's top. Laid out like the live
+ * HUD (.fr-hud in the app's globals.css): per side a name line with the
+ * record beside the name towards the middle, the HP bar under it in the
+ * fighter's brand colour, the round on a framed plate between the bars.
+ * Sized for 390 px playback: names 30–34 px, bars 24 px at 1080 wide.
  */
-const HUD = { minH: 116, side: 40, nameY: 14, nameSize: 32, roomName: 380, roundY: 18, roundW: 240, roundH: 26, barY: 58, barH: 20, barW: 440, recY: 88, recSize: 20 };
+const HUD = {
+  minH: 116, side: 40, barW: 400,
+  nameY: 16, nameMax: 34, nameMin: 30, recSize: 22, recGap: 20,
+  barY: 62, barH: 24,
+  roundY: 10, roundW: 168, roundH: 84,
+};
+/** The live HUD's own inks (--fr-ink, --fr-muted, --fr-line, --fr-deep in the app). */
+const HUD_C = { ink: "#e8ecf4", muted: "#8c95a6", line: "#1e2430", deep: "#05070c" };
+
+/** A side's HP fill colour from the page (solid, or a gradient's first stop); null if none reads. */
+export function hudFill(side) {
+  const first = String(side?.fillImage ?? "").match(/rgba?\([^)]*\)|#[0-9a-f]{6}\b/i)?.[0];
+  return solidColor(side?.fill) ?? solidColor(first) ?? null;
+}
+
+/**
+ * One side's name line, like the live .fr-nameline: name on the outside
+ * edge, record next to it towards the middle, both in the pixel font. A name
+ * longer than the room ends in "…" at nameMin rather than shrinking further.
+ */
+function nameLine({ x, y, name, record, size, right }) {
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const nm = `<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${HUD_C.ink}">${esc(name)}</span>`;
+  const rec = record ? `<span style="flex:none;font-size:${HUD.recSize}px;color:${HUD_C.muted}">${esc(record)}</span>` : "";
+  return `<div class="abs px" style="left:${x}px;top:${y}px;width:${HUD.barW}px;display:flex;align-items:baseline;gap:${HUD.recGap}px;` +
+    `${right ? "flex-direction:row-reverse;" : ""}font-size:${size}px;line-height:1">${nm}${rec}</div>`;
+}
 
 /**
  * @param {object} meta the 16:9 recording's meta.json, with track (record.mjs track: true)
@@ -170,23 +199,31 @@ export function planB(meta, cut, title, dir, log = console.log) {
   const hudY = stageY;
 
   // HUD chrome: the band, names, W–L records, empty bars; fills and the round go on per frame.
-  const names = meta.hud ?? [{ name: title.a, record: "" }, { name: title.b, record: "" }];
-  const nameSize = Math.min(...names.map((n) => fitPixel(n.name, HUD.roomName, HUD.nameSize, 20) ?? 20));
+  // Names are the job's (upper-case, challenger first = page side a, the
+  // left one), never the page HUD's text, whose casing is the startup's own.
+  // Records and colours come from the page HUD, side by side.
+  const sides = meta.hud ?? [];
+  const names = [title.a, title.b].map((name, i) => ({ name, record: sides[i]?.record ?? "" }));
+  const nameSize = Math.min(
+    // Monospaced glyphs as wide as the size (no letter-spacing: at 1080 px
+    // the live 0.04em would cost a ten-letter name its last glyph).
+    ...names.map((n) => fitPixel(n.name, HUD.barW - (n.record ? n.record.length * HUD.recSize + HUD.recGap : 0), HUD.nameMax, HUD.nameMin) ?? HUD.nameMin),
+  );
+  const fill = [0, 1].map((i) => hudFill(sides[i]) ?? C.text);
+  const trackC = [0, 1].map((i) => solidColor(sides[i]?.track, C.surface) ?? C.track);
   const L = HUD.side;
   const R = 1080 - HUD.side;
   const items = [
     ...titleItems(title, titleY).items,
-    textItem({ x: L, y: hudY + HUD.nameY, w: HUD.roomName, text: names[0].name, size: nameSize, color: C.text, align: "left" }),
-    textItem({ x: R - HUD.roomName, y: hudY + HUD.nameY, w: HUD.roomName, text: names[1].name, size: nameSize, color: C.text, align: "right" }),
-    textItem({ x: L, y: hudY + HUD.recY, w: HUD.barW, text: names[0].record, size: HUD.recSize, color: C.muted, align: "left" }),
-    textItem({ x: R - HUD.barW, y: hudY + HUD.recY, w: HUD.barW, text: names[1].record, size: HUD.recSize, color: C.muted, align: "right" }),
+    nameLine({ x: L, y: hudY + HUD.nameY, ...names[0], size: nameSize, right: false }),
+    nameLine({ x: R - HUD.barW, y: hudY + HUD.nameY, ...names[1], size: nameSize, right: true }),
     textItem({ y: domainY, w: 1080, text: "insertcoin.lol", size: DOMAIN_SIZE }),
   ];
   const barY = hudY + HUD.barY;
   const boxes = [
     { x: 0, y: hudY, w: 1080, h: bandH, color: C.surface },
-    { x: L, y: barY, w: HUD.barW, h: HUD.barH, color: C.track },
-    { x: R - HUD.barW, y: barY, w: HUD.barW, h: HUD.barH, color: C.track },
+    { x: L, y: barY, w: HUD.barW, h: HUD.barH, color: trackC[0] },
+    { x: R - HUD.barW, y: barY, w: HUD.barW, h: HUD.barH, color: trackC[1] },
   ];
   const chrome = path.join(dir, "chrome-b.png");
   const stills = [{ file: chrome, w: 1080, h: 1920, html: layerHtml(1080, 1920, items, boxes) }];
@@ -204,10 +241,15 @@ export function planB(meta, cut, title, dir, log = console.log) {
     if (roundFiles.has(r.v)) continue;
     const file = path.join(dir, `round-${r.v}.png`);
     roundFiles.set(r.v, file);
-    stills.push({ file, w: HUD.roundW, h: HUD.roundH, html: layerHtml(HUD.roundW, HUD.roundH, [textItem({ y: 2, w: HUD.roundW, text: `ROUND · ${r.v}`, size: 22, color: C.muted })]) });
+    // The live .fr-mid plate: ROUND over the number, framed.
+    const plate = `<div class="abs px" style="left:0;top:0;width:${HUD.roundW}px;height:${HUD.roundH}px;box-sizing:border-box;border:2px solid ${HUD_C.line};` +
+      `background:${HUD_C.deep};text-align:center;padding-top:12px">` +
+      `<div style="font-size:22px;letter-spacing:0.14em;color:${HUD_C.muted};margin-left:0.14em">ROUND</div>` +
+      `<div style="font-size:34px;margin-top:8px;color:${HUD_C.ink}">${r.v}</div></div>`;
+    stills.push({ file, w: HUD.roundW, h: HUD.roundH, html: pageHtml(HUD.roundW, HUD.roundH, plate) });
   }
   return {
-    cw, ch, oy, xs, sh, stageY, hudY, barY, domainY, bandH, into, outside,
+    cw, ch, oy, xs, sh, stageY, hudY, barY, domainY, bandH, into, outside, fill,
     wide: crop.wide, snaps: crop.snaps, wordCut: crop.wordCut, chrome, stills, hpA, hpB, rounds, roundFiles,
     share: { stage: sh / 1920, picture: (sh - bandH) / 1920 },
   };
@@ -227,8 +269,9 @@ export function encodeB(plan, cut, track, out, dir, endcardPng = null) {
   const fills = [];
   const L = HUD.side;
   const R = 1080 - HUD.side;
-  for (const r of plan.hpA) if (r.v > 0) fills.push(`drawbox=x=${L}:y=${plan.barY}:w=${r.v}:h=${HUD.barH}:color=${C.text.replace("#", "0x")}:t=fill:enable='between(n,${r.from},${r.to})'`);
-  for (const r of plan.hpB) if (r.v > 0) fills.push(`drawbox=x=${R - r.v}:y=${plan.barY}:w=${r.v}:h=${HUD.barH}:color=${C.text.replace("#", "0x")}:t=fill:enable='between(n,${r.from},${r.to})'`);
+  const [fa, fb] = plan.fill.map((c) => c.replace("#", "0x"));
+  for (const r of plan.hpA) if (r.v > 0) fills.push(`drawbox=x=${L}:y=${plan.barY}:w=${r.v}:h=${HUD.barH}:color=${fa}:t=fill:enable='between(n,${r.from},${r.to})'`);
+  for (const r of plan.hpB) if (r.v > 0) fills.push(`drawbox=x=${R - r.v}:y=${plan.barY}:w=${r.v}:h=${HUD.barH}:color=${fb}:t=fill:enable='between(n,${r.from},${r.to})'`);
   let graph =
     `[0:v]format=rgb24,sendcmd=f='${cmdFile.replace(/'/g, "'\\''")}',crop@win=w=${plan.cw}:h=${plan.ch}:x=${plan.xs[0]}:y=${plan.oy},` +
     `scale=1080:${plan.sh}:flags=lanczos,setsar=1,pad=1080:1920:0:${plan.stageY}:color=${BG}[base];[base][2:v]overlay=0:0` +

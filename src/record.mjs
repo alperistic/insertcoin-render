@@ -339,13 +339,27 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
   }
 }
 
-/** The in-stage HUD's names and records (W–L), as the page writes them. */
+/**
+ * The in-stage HUD per side (a = left = challenger): name and record (W–L)
+ * as the page writes them, and the computed colours of the HP fill (the
+ * fighter's brand colour, set inline by the engine) and of its empty track.
+ * A colour the page draws as an image (gradient) has no solid value here;
+ * fill/track stay what getComputedStyle says, the cut decides what it uses.
+ */
 async function readHud(page) {
   return page.evaluate(() =>
-    ["a", "b"].map((s) => ({
-      name: document.querySelector(`[data-fr="fname-${s}"]`)?.textContent?.trim() ?? "",
-      record: document.querySelector(`[data-fr="hud-${s}"] .fr-frec`)?.textContent?.trim() ?? "",
-    })),
+    ["a", "b"].map((s) => {
+      const fill = document.querySelector(`[data-fr="hpf-${s}"]`);
+      const fs_ = fill ? getComputedStyle(fill) : null;
+      const track = fill?.parentElement ? getComputedStyle(fill.parentElement) : null;
+      return {
+        name: document.querySelector(`[data-fr="fname-${s}"]`)?.textContent?.trim() ?? "",
+        record: document.querySelector(`[data-fr="hud-${s}"] .fr-frec`)?.textContent?.trim() ?? "",
+        fill: fs_?.backgroundColor ?? null,
+        fillImage: fs_ && fs_.backgroundImage !== "none" ? fs_.backgroundImage : null,
+        track: track?.backgroundColor ?? null,
+      };
+    }),
   );
 }
 

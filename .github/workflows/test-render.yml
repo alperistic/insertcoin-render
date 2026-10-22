@@ -43,6 +43,7 @@ jobs:
           done
           ffmpeg -v error -y -sseof -0.5 -i 16x9.mp4 -frames:v 1 16x9-last.png
           ffmpeg -v error -y -ss 0.1 -i 9x16.mp4 -frames:v 1 9x16-first.png
+          ffmpeg -v error -y -sseof -0.5 -i 9x16.mp4 -frames:v 1 9x16-last.png
       - uses: actions/upload-artifact@v4
         with:
           name: render-${{ env.MATCH }}

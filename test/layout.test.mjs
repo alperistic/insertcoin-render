@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { endCardModel, even, fitPixel, holdSpans, parseDecided, tierLabel, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
+import { decidedInColumns, endCardModel, even, solidColor, fitPixel, holdSpans, parseDecided, tierLabel, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
 
 const FPS = 60;
 const W = { stageW: 716, winW: 533, margin: 22, maxSpeed: 340, fps: FPS };
@@ -172,4 +172,29 @@ test("the tier reads as the stage says it", () => {
   assert.equal(tierLabel("KO · PERFECT"), "K.O. · PERFECT");
   assert.equal(tierLabel("SPLIT DECISION"), "SPLIT DECISION");
   assert.equal(tierLabel(null), null);
+});
+
+test("the decided values stand in the totals' column order, the winner's marked", () => {
+  // 87c5: the loser on the left, the page writes the winner's value first.
+  const right = endCardModel({
+    cols: [{ name: "Cordinare", total: "2305", win: false }, { name: "insertcoin", total: "2320", win: true }],
+    tiers: [], cards: null, decided: "DECIDED ON VOICE · 8.3 VS 6.3", decidedWin: "8.3",
+  });
+  assert.deepEqual(decidedInColumns(right), [{ value: "6.3", win: false }, { value: "8.3", win: true }]);
+  // 7fb3: the winner on the left.
+  const left = endCardModel({
+    cols: [{ name: "ATEL", total: "1925", win: true }, { name: "Ttrrechner", total: "1635", win: false }],
+    tiers: ["KO"], cards: null, decided: "DECIDED ON PROOF · 6.7 VS 3.0", decidedWin: "6.7",
+  });
+  assert.deepEqual(decidedInColumns(left), [{ value: "6.7", win: true }, { value: "3.0", win: false }]);
+  assert.equal(decidedInColumns({ ...left, decided: null }), null);
+});
+
+test("solidColor reads the page's computed colours and lays translucent ones over the band", () => {
+  assert.equal(solidColor("rgb(181, 110, 74)"), "#b56e4a");
+  assert.equal(solidColor("#35D4AF".toLowerCase()), "#35d4af");
+  assert.equal(solidColor("rgba(255, 255, 255, 0.07)", "#0a0a0d"), "#1b1b1e");
+  assert.equal(solidColor("rgba(0, 0, 0, 0)"), null);
+  assert.equal(solidColor(""), null);
+  assert.equal(solidColor("linear-gradient(red, blue)"), null);
 });
