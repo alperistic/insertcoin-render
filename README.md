@@ -36,6 +36,28 @@ TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match <match-id>
 
 This writes `out/<match-id>/16x9.mp4` and `9x16.mp4` without uploading anything. It needs ffmpeg with `drawtext`.
 
+## 9:16 candidates and the end card (opt-in)
+
+Today's 9:16 is the 16:9 stage letterboxed across the width (a third of the height), and both files end on the winner's banner without the totals. Two other 9:16 cuts and a score end card can be switched on to compare; with none of these set, both files are cut exactly as above.
+
+| env | values | |
+|---|---|---|
+| `PORTRAIT` | `legacy` (default), `a`, `b`, `both` | which 9:16 goes into `9x16.mp4`; `both` writes `9x16-a.mp4` and `9x16-b.mp4` and is for `--match` only |
+| `ENDCARD` | `1` | appends the end card to both files (2.5 s, a 0.3 s fade from the last frame) |
+| `ENDCARD_NOTE` | `0` | leaves out the end card's line "The fight is drawn from the judges' scorecards." |
+
+- **A · compact live stage** (`src/portrait.mjs`): a second recording at a phone viewport (432×608 CSS px at device scale 2.5, so 1080 px wide), where the page lays out a 4:3 stage with its mobile HUD above and the commentary below. The buttons between HUD and stage are cut out. Takes a second slow-motion pass, about as long as the first.
+- **B · vertical composition**: from the 16:9 recording, a 4:3 window of the stage that follows both fighters (their drawn bounds, weapons and effects included, sampled on every page frame), with its own HUD above it. If a fighter or an effect ever reaches into the stage's HUD band, the window keeps the full height, and the log says so.
+- **End card**: the winner, both sealed totals, the tier and what decided it, read off the page's own end card and shown as the page writes them.
+
+To compare everything for one fight:
+
+```sh
+TITLE_A=ATEL TITLE_B=TTRRECHNER node render.mjs --match <match-id> --candidates
+```
+
+This writes `16x9.mp4` (with the end card), today's `9x16.mp4`, `9x16-a.mp4` and `9x16-b.mp4` (both with the end card), plus `candidates.json` with the measured layout. The new formats draw all their text as PNGs in Chromium (`src/stills.mjs`), so they do not need `drawtext`; locally, without it, `--candidates` draws today's 9:16 text the same way.
+
 ## Assets
 
 - `assets/PressStart2P-Regular.ttf`: Press Start 2P, SIL Open Font License, see `assets/OFL-PressStart2P.txt`
