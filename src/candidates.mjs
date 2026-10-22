@@ -1,5 +1,5 @@
-// The opt-in candidates (PORTRAIT=a|b|both, ENDCARD=1) cut from recordings
-// already made: render.mjs records, this composes. Apart so a cut can be
+// The 9:16 cuts (B by default, A, both) and the end card, cut from
+// recordings already made: render.mjs records, this composes. Apart so a cut can be
 // redone from out/<id>/rec without recording the fight again.
 
 import fs from "node:fs";
