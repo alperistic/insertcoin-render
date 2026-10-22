@@ -58,7 +58,7 @@ To compare everything for one fight:
 TITLE_A=ATEL TITLE_B=TTRRECHNER node render.mjs --match <match-id> --candidates
 ```
 
-This writes `16x9.mp4`, the letterbox `9x16.mp4`, `9x16-a.mp4` and `9x16-b.mp4`, all with the end card, plus `candidates.json` with the measured layout. Without `drawtext` locally (Homebrew's ffmpeg), the letterbox's text is drawn the same PNG way.
+This writes `16x9.mp4`, `9x16-a.mp4` and `9x16-b.mp4` with the end card, the letterbox `9x16.mp4` without one (it stays the old cut, for comparison), plus `candidates.json` with the measured layout. Without `drawtext` locally (Homebrew's ffmpeg), the letterbox's text is drawn the same PNG way.
 
 ## Assets
 
