@@ -24,6 +24,12 @@ const MUSIC = path.join(ASSETS, "music.m4a");
  * 30 fps video showed every second one.
  */
 export const FPS = 60;
+
+// Legacy 9:16 layout: stage height, and the domain line 108 px below the stage.
+// One place, shared with the end card still (candidates.mjs).
+export const LEGACY_H = 608;
+export const LEGACY_Y = Math.round((1920 - LEGACY_H) / 2);
+export const LEGACY_DOMAIN_Y = LEGACY_Y + LEGACY_H + 108;
 /** How long the last frame of the fight (the winner's banner) stays up. */
 const HOLD_S = 1.0;
 /** The stage's border, in CSS px, left out of the crop. */
@@ -156,8 +162,8 @@ export function buildVideos(recDir, title, outDir, opts = {}) {
 
   // 9:16: the stage across the full width in the middle, the names above it
   // and insertcoin.lol below, in the site's pixel font.
-  const H = 608;
-  const Y = Math.round((1920 - H) / 2);
+  const H = LEGACY_H;
+  const Y = LEGACY_Y;
   const layout = titleLayout(title.a, title.b);
   const lineGap = Math.round(layout.size * 0.6);
   const blockH = layout.lines.length * layout.size + (layout.lines.length - 1) * lineGap;
@@ -169,7 +175,7 @@ export function buildVideos(recDir, title, outDir, opts = {}) {
   });
   const domainFile = path.join(recDir, "domain.txt");
   fs.writeFileSync(domainFile, "insertcoin.lol");
-  draws.push(`drawtext=fontfile=${FONT}:textfile=${domainFile}:fontsize=32:fontcolor=${CHROME}:x=(w-text_w)/2:y=${Y + H + 108}`);
+  draws.push(`drawtext=fontfile=${FONT}:textfile=${domainFile}:fontsize=32:fontcolor=${CHROME}:x=(w-text_w)/2:y=${LEGACY_DOMAIN_Y}`);
 
   const portrait = path.join(outDir, "9x16.mp4");
   const base = `[0:v]format=rgb24,${crop},scale=1080:${H}:flags=area,setsar=1,pad=1080:1920:0:${Y}:color=${BG}`;
@@ -202,13 +208,13 @@ export function buildVideos(recDir, title, outDir, opts = {}) {
  * text, Press Start 2P's line box equals its size), as a stills.mjs page.
  */
 export function legacyChromeStill(title, file) {
-  const H = 608;
-  const Y = Math.round((1920 - H) / 2);
+  const H = LEGACY_H;
+  const Y = LEGACY_Y;
   const layout = titleLayout(title.a, title.b);
   const lineGap = Math.round(layout.size * 0.6);
   const blockH = layout.lines.length * layout.size + (layout.lines.length - 1) * lineGap;
   const titleTop = Y - 140 - blockH + layout.size;
   const items = layout.lines.map((line, i) => textItem({ y: titleTop + i * (layout.size + lineGap), w: 1080, text: line, size: layout.size }));
-  items.push(textItem({ y: Y + H + 108, w: 1080, text: "insertcoin.lol", size: 32 }));
+  items.push(textItem({ y: LEGACY_DOMAIN_Y, w: 1080, text: "insertcoin.lol", size: 32 }));
   return { file, w: 1080, h: 1920, html: layerHtml(1080, 1920, items) };
 }

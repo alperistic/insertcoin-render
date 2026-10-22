@@ -380,13 +380,19 @@ async function readEndCard(page) {
         decidedWin: txt(ec.querySelector(".fr-ec-row.fr-ec-decided b.fr-w")),
       };
     });
-  let last = "";
-  let same = 0;
-  for (let i = 0; i < 40 && same < 2; i++) {
-    await page.waitForTimeout(500);
-    const now = JSON.stringify(await read());
-    same = now === last ? same + 1 : 0;
-    last = now;
+  // Any page/evaluate failure (navigation, closed page) must not fail the render.
+  try {
+    let last = "";
+    let same = 0;
+    for (let i = 0; i < 40 && same < 2; i++) {
+      await page.waitForTimeout(500);
+      const now = JSON.stringify(await read());
+      same = now === last ? same + 1 : 0;
+      last = now;
+    }
+    return JSON.parse(last);
+  } catch (e) {
+    console.warn(`end card not readable: ${e instanceof Error ? e.message : e}; no end card in the video`);
+    return null;
   }
-  return JSON.parse(last);
 }

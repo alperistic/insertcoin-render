@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { ENDCARD_S, buildVideos, hasDrawtext, legacyChromeStill, musicTrack, prepareCut } from "./build.mjs";
+import { ENDCARD_S, LEGACY_DOMAIN_Y, buildVideos, hasDrawtext, legacyChromeStill, musicTrack, prepareCut } from "./build.mjs";
 import { endCardModel } from "./layout.mjs";
 import { encodeA, encodeB, endcardStill, planA, planB } from "./portrait.mjs";
 import { renderStills } from "./stills.mjs";
@@ -57,7 +57,7 @@ export async function composeCandidates({ matchId, title, workDir, cfg, rec, rec
     }
     if (cfg.legacy && !cfg.candidates) {
       ec.portrait = path.join(stillDir, "endcard-9x16.png");
-      stills.push(endcardStill(model, ec.portrait, { portrait: true, domainY: 656 + 608 + 108, note: cfg.note }));
+      stills.push(endcardStill(model, ec.portrait, { portrait: true, domainY: LEGACY_DOMAIN_Y, note: cfg.note }));
     }
   }
   const legacyChrome = cfg.legacy && !hasDrawtext() ? path.join(stillDir, "chrome-legacy.png") : null;
