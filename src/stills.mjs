@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { fitPixel, tierLabel } from "./layout.mjs";
+import { decidedInColumns, fitPixel, tierLabel } from "./layout.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONT = path.join(HERE, "..", "assets", "PressStart2P-Regular.ttf");
@@ -90,9 +90,12 @@ export function endCardHtml(m, { w, h, domainY, domainSize, note }) {
       ${col(m.cols[1])}
     </div>`;
   const cards = m.cards ? `<div class="px" style="font-size:20px;color:${C.muted};margin-top:44px">${esc(m.cards)}</div>` : "";
-  const decided = m.decided
+  // The two values stand under the totals' columns, left first: the winner's green.
+  const dv = decidedInColumns(m);
+  const val = (v) => `<span style="color:${v.win ? C.win : C.text}">${esc(v.value)}</span>`;
+  const decided = dv
     ? `<div class="px" style="font-size:24px;color:${C.muted};margin-top:${portrait ? 150 : 84}px">DECIDED ON ${esc(m.decided.rubric)}</div>
-       <div class="px" style="font-size:48px;margin-top:32px"><span style="color:${C.win}">${esc(m.decided.winner)}</span><span style="color:${C.faint}"> VS </span><span style="color:${C.text}">${esc(m.decided.loser)}</span></div>`
+       <div class="px" style="font-size:48px;margin-top:32px">${val(dv[0])}<span style="color:${C.faint}"> VS </span>${val(dv[1])}</div>`
     : "";
   const noteHtml = note
     ? `<div class="sans" style="font-size:${portrait ? 30 : 26}px;color:${C.muted};margin-top:${portrait ? 120 : 64}px;letter-spacing:0.01em">The fight is drawn from the judges' scorecards.</div>`

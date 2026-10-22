@@ -275,3 +275,16 @@ export function tierLabel(tier) {
     .map((t) => word[t.trim().toUpperCase()] ?? t)
     .join(" · ");
 }
+
+/**
+ * The decided rubric's two values in the end card's column order (left
+ * column first, like the totals above them), each marked with whether it is
+ * the winner's. Values verbatim from the model; null without a decided line.
+ *
+ * @param {ReturnType<typeof endCardModel>} m
+ * @returns {{ value: string, win: boolean }[] | null}
+ */
+export function decidedInColumns(m) {
+  if (!m?.decided) return null;
+  return m.cols.map((c) => ({ value: c.win ? m.decided.winner : m.decided.loser, win: c.win }));
+}
