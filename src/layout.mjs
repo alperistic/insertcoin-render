@@ -288,3 +288,25 @@ export function decidedInColumns(m) {
   if (!m?.decided) return null;
   return m.cols.map((c) => ({ value: c.win ? m.decided.winner : m.decided.loser, win: c.win }));
 }
+
+/**
+ * A CSS colour as the page computed it ("rgb(181, 110, 74)",
+ * "rgba(255, 255, 255, 0.07)", "#b56e4a") to an opaque #rrggbb, a
+ * translucent one laid over `over` (#rrggbb) the way the page lays it over
+ * what is behind. Null when it does not read or is fully transparent.
+ */
+export function solidColor(css, over = "#000000") {
+  const s = String(css ?? "").trim().toLowerCase();
+  let rgba = null;
+  const hex = /^#([0-9a-f]{6})$/.exec(s);
+  const fn = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(s);
+  if (hex) rgba = [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16)).concat(1);
+  else if (fn) {
+    const a = fn[4] == null ? 1 : fn[4].endsWith("%") ? parseFloat(fn[4]) / 100 : parseFloat(fn[4]);
+    rgba = [Number(fn[1]), Number(fn[2]), Number(fn[3]), a];
+  }
+  if (!rgba || rgba.slice(0, 3).some((v) => !Number.isFinite(v)) || !(rgba[3] > 0)) return null;
+  const base = /^#([0-9a-f]{6})$/.exec(over) ? [0, 2, 4].map((i) => parseInt(over.slice(1 + i, 3 + i), 16)) : [0, 0, 0];
+  const a = Math.min(1, rgba[3]);
+  return "#" + [0, 1, 2].map((i) => Math.round(rgba[i] * a + base[i] * (1 - a)).toString(16).padStart(2, "0")).join("");
+}

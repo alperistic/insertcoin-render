@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decidedInColumns, endCardModel, even, fitPixel, holdSpans, parseDecided, tierLabel, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
+import { decidedInColumns, endCardModel, even, solidColor, fitPixel, holdSpans, parseDecided, tierLabel, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
 
 const FPS = 60;
 const W = { stageW: 716, winW: 533, margin: 22, maxSpeed: 340, fps: FPS };
@@ -188,4 +188,13 @@ test("the decided values stand in the totals' column order, the winner's marked"
   });
   assert.deepEqual(decidedInColumns(left), [{ value: "6.7", win: true }, { value: "3.0", win: false }]);
   assert.equal(decidedInColumns({ ...left, decided: null }), null);
+});
+
+test("solidColor reads the page's computed colours and lays translucent ones over the band", () => {
+  assert.equal(solidColor("rgb(181, 110, 74)"), "#b56e4a");
+  assert.equal(solidColor("#35D4AF".toLowerCase()), "#35d4af");
+  assert.equal(solidColor("rgba(255, 255, 255, 0.07)", "#0a0a0d"), "#1b1b1e");
+  assert.equal(solidColor("rgba(0, 0, 0, 0)"), null);
+  assert.equal(solidColor(""), null);
+  assert.equal(solidColor("linear-gradient(red, blue)"), null);
 });

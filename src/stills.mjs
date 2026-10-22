@@ -32,7 +32,8 @@ export const C = {
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-function page(w, h, body, bg = "transparent") {
+/** A w x h page with the pixel font loaded from assets/ (no network), transparent unless bg. */
+export function pageHtml(w, h, body, bg = "transparent") {
   const font = fs.readFileSync(FONT).toString("base64");
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face { font-family: "px"; src: url(data:font/ttf;base64,${font}) format("truetype"); }
@@ -55,7 +56,7 @@ export function textItem({ x = 0, y, w, text, size, color = C.chrome, font = "px
 /** A transparent layer w x h with text items and flat boxes on it. */
 export function layerHtml(w, h, items = [], boxes = []) {
   const bx = boxes.map((b) => `<div class="abs" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px;background:${b.color}"></div>`);
-  return page(w, h, bx.join("") + items.join(""));
+  return pageHtml(w, h, bx.join("") + items.join(""));
 }
 
 /**
@@ -104,7 +105,7 @@ export function endCardHtml(m, { w, h, domainY, domainSize, note }) {
       ${headHtml}${tier}${scores}${cards}${decided}${noteHtml}
     </div>
     ${textItem({ x: 0, y: domainY, w, text: "insertcoin.lol", size: domainSize, color: C.chrome })}`;
-  return page(w, h, body, C.bg);
+  return pageHtml(w, h, body, C.bg);
 }
 
 /**
