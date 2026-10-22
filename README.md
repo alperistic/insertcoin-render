@@ -47,7 +47,7 @@ Today's 9:16 is the 16:9 stage letterboxed across the width (a third of the heig
 | `ENDCARD_NOTE` | `0` | leaves out the end card's line "The fight is drawn from the judges' scorecards." |
 
 - **A · compact live stage** (`src/portrait.mjs`): a second recording at a phone viewport (432×608 CSS px at device scale 2.5, so 1080 px wide), where the page lays out a 4:3 stage with its mobile HUD above and the commentary below. The buttons between HUD and stage are cut out. Takes a second slow-motion pass, about as long as the first.
-- **B · vertical composition**: from the 16:9 recording, a 4:3 window of the stage that follows both fighters (their drawn bounds, weapons and effects included, sampled on every page frame), with its own HUD above it. If a fighter or an effect ever reaches into the stage's HUD band, the window keeps the full height, and the log says so.
+- **B · vertical composition**: from the 16:9 recording, a full-height 4:3 window of the stage that follows both fighters (their drawn bounds, weapons and effects included, sampled on every page frame). Stage words (K.O., WINS, ROUND, FIGHT) are framed only when they fit together with both fighters; a fighter is never cut for a word. Its own HUD is drawn opaque over the window's top band, covering the stage's cropped HUD, like the page draws its HUD over the fighters; the log counts the frames where a fighter reaches under it. `src/candidates.mjs` composes the cut from the recordings, so a cut can be redone without recording again.
 - **End card**: the winner, both sealed totals, the tier and what decided it, read off the page's own end card and shown as the page writes them.
 
 To compare everything for one fight:

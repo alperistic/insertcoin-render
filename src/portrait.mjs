@@ -109,8 +109,12 @@ const MARGIN_STAGE = 40;
 const SPEED_STAGE = 700;
 /** s a word over the fight keeps counting before and after it is drawn */
 const WORD_HOLD = 0.35;
-/** Our HUD above the stage, output px. */
-const HUD = { h: 96, gap: 16, side: 60, barY: 44, barH: 20, barW: 440, recY: 78 };
+/**
+ * Our HUD, drawn opaque over the window's top band where the stage's own
+ * (cropped) HUD is, output px from the band's top. Sized for 390 px
+ * playback: names 32 px, bars 20 px at 1080 wide.
+ */
+const HUD = { minH: 116, side: 40, nameY: 14, nameSize: 32, roomName: 380, roundY: 18, roundW: 240, roundH: 26, barY: 58, barH: 20, barW: 440, recY: 88, recSize: 20 };
 
 /**
  * @param {object} meta the 16:9 recording's meta.json, with track (record.mjs track: true)
@@ -139,46 +143,48 @@ export function planB(meta, cut, title, dir, log = console.log) {
   const winW = innerH * (4 / 3);
   const crop = trackCrop(track, { stageW: innerW, winW, margin: MARGIN_STAGE * s, maxSpeed: SPEED_STAGE * s, fps: FPS, times });
 
-  // The stage's own HUD would be cut at the corners by a 4:3 window, so the
-  // window starts below it and ours stands above the stage. Unless a fighter
-  // ever reaches up into that band (a jump, a float): then the full height
-  // stays, the stage's HUD with it, and that is logged.
+  // The stage's own HUD would be cut at the corners by a 4:3 window. Ours
+  // goes over it: an opaque band exactly as tall as the stage's HUD rows,
+  // drawn on top of the stage like the live page draws its HUD over the
+  // fighters. What of a fighter reaches up under the band (hair, a jump,
+  // an effect) is hidden there; those frames are counted and logged.
   const hud = meta.rects?.hud;
   const hudBottom = hud ? hud.y + hud.h - (meta.box.y + BORDER) + 2 : 0;
   const into = crop.need.filter((u) => u && u[1] < hudBottom).length;
-  const cutTop = hud && into === 0 ? Math.ceil(hudBottom) : 0;
-  if (hud && into > 0) log(`B: ${into} frames reach into the HUD band (top ${hudBottom.toFixed(0)} css px); full-height window`);
+  if (hud) log(`B: ${into} frames reach under the HUD band (top ${hudBottom.toFixed(0)} css px of ${innerH.toFixed(0)})`);
   let outside = 0;
   crop.need.forEach((u, k) => {
     if (u && (u[0] < crop.x[k] - 0.5 || u[2] > crop.x[k] + winW + 0.5)) outside++;
   });
 
   const cw = even(winW * d);
-  const ch = even((innerH - cutTop) * d);
+  const ch = even(innerH * d);
   const ox = even((meta.box.x + BORDER) * d);
-  const oy = even((meta.box.y + BORDER) * d) + even(cutTop * d);
+  const oy = even((meta.box.y + BORDER) * d);
   const xs = crop.x.map((x) => Math.min(ox + Math.round(x * d), ox + even(innerW * d) - cw));
   const sh = even((ch * 1080) / cw);
+  const bandH = Math.max(HUD.minH, even((hudBottom / innerH) * sh));
 
   const tH = titleHeight(title);
-  const [titleY, hudY, stageY, domainY] = stackLayout([tH, HUD.h, sh, DOMAIN_SIZE], [GAP_TITLE, HUD.gap, GAP_DOMAIN]);
+  const [titleY, stageY, domainY] = stackLayout([tH, sh, DOMAIN_SIZE], [GAP_TITLE, GAP_DOMAIN]);
+  const hudY = stageY;
 
-  // HUD chrome: names, W–L records, empty bars; fills and the round go on per frame.
+  // HUD chrome: the band, names, W–L records, empty bars; fills and the round go on per frame.
   const names = meta.hud ?? [{ name: title.a, record: "" }, { name: title.b, record: "" }];
-  const nameRoom = 360;
-  const nameSize = Math.min(...names.map((n) => fitPixel(n.name, nameRoom, 28, 12) ?? 12));
+  const nameSize = Math.min(...names.map((n) => fitPixel(n.name, HUD.roomName, HUD.nameSize, 20) ?? 20));
   const L = HUD.side;
   const R = 1080 - HUD.side;
   const items = [
     ...titleItems(title, titleY).items,
-    textItem({ x: L, y: hudY, w: nameRoom, text: names[0].name, size: nameSize, color: C.text, align: "left" }),
-    textItem({ x: R - nameRoom, y: hudY, w: nameRoom, text: names[1].name, size: nameSize, color: C.text, align: "right" }),
-    textItem({ x: L, y: hudY + HUD.recY, w: HUD.barW, text: names[0].record, size: 18, color: C.muted, align: "left" }),
-    textItem({ x: R - HUD.barW, y: hudY + HUD.recY, w: HUD.barW, text: names[1].record, size: 18, color: C.muted, align: "right" }),
+    textItem({ x: L, y: hudY + HUD.nameY, w: HUD.roomName, text: names[0].name, size: nameSize, color: C.text, align: "left" }),
+    textItem({ x: R - HUD.roomName, y: hudY + HUD.nameY, w: HUD.roomName, text: names[1].name, size: nameSize, color: C.text, align: "right" }),
+    textItem({ x: L, y: hudY + HUD.recY, w: HUD.barW, text: names[0].record, size: HUD.recSize, color: C.muted, align: "left" }),
+    textItem({ x: R - HUD.barW, y: hudY + HUD.recY, w: HUD.barW, text: names[1].record, size: HUD.recSize, color: C.muted, align: "right" }),
     textItem({ y: domainY, w: 1080, text: "insertcoin.lol", size: DOMAIN_SIZE }),
   ];
   const barY = hudY + HUD.barY;
   const boxes = [
+    { x: 0, y: hudY, w: 1080, h: bandH, color: C.surface },
     { x: L, y: barY, w: HUD.barW, h: HUD.barH, color: C.track },
     { x: R - HUD.barW, y: barY, w: HUD.barW, h: HUD.barH, color: C.track },
   ];
@@ -198,12 +204,12 @@ export function planB(meta, cut, title, dir, log = console.log) {
     if (roundFiles.has(r.v)) continue;
     const file = path.join(dir, `round-${r.v}.png`);
     roundFiles.set(r.v, file);
-    stills.push({ file, w: 240, h: 24, html: layerHtml(240, 24, [textItem({ y: 2, w: 240, text: `ROUND · ${r.v}`, size: 20, color: C.muted })]) });
+    stills.push({ file, w: HUD.roundW, h: HUD.roundH, html: layerHtml(HUD.roundW, HUD.roundH, [textItem({ y: 2, w: HUD.roundW, text: `ROUND · ${r.v}`, size: 22, color: C.muted })]) });
   }
   return {
-    cw, ch, oy, xs, sh, stageY, hudY, barY, domainY, cutTop, into, outside,
-    wide: crop.wide, snaps: crop.snaps, chrome, stills, hpA, hpB, rounds, roundFiles,
-    share: { stage: sh / 1920 },
+    cw, ch, oy, xs, sh, stageY, hudY, barY, domainY, bandH, into, outside,
+    wide: crop.wide, snaps: crop.snaps, wordCut: crop.wordCut, chrome, stills, hpA, hpB, rounds, roundFiles,
+    share: { stage: sh / 1920, picture: (sh - bandH) / 1920 },
   };
 }
 
@@ -230,7 +236,7 @@ export function encodeB(plan, cut, track, out, dir, endcardPng = null) {
   let last = "h0";
   roundList.forEach((v, i) => {
     const on = plan.rounds.filter((r) => r.v === v).map((r) => `between(n,${r.from},${r.to})`).join("+");
-    graph += `;[${last}][${3 + i}:v]overlay=${(1080 - 240) / 2}:${plan.hudY + 4}:enable='${on}'[h${i + 1}]`;
+    graph += `;[${last}][${3 + i}:v]overlay=${(1080 - HUD.roundW) / 2}:${plan.hudY + HUD.roundY}:enable='${on}'[h${i + 1}]`;
     last = `h${i + 1}`;
   });
   const ecIdx = 3 + roundList.length;
