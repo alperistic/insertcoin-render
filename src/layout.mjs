@@ -48,8 +48,11 @@ export function samplesAt(track, t, { slack = 0.012, ahead = 0.004 } = {}) {
  * rare, the corridor each frame is narrowed by what is coming (a move ending
  * at the right edge in 0.3 s starts the pan early enough to get there at top
  * speed). A union wider than the window is centred and counted in `wide`.
+ * A sample's `w` = [x0, x1] (a word over the fight) is taken in too; where
+ * word and fighters do not fit together the word wins (counted in `need`
+ * terms as content outside, by the caller).
  *
- * @param {{ t: number, u: number[] | null }[]} track samples, u = [x0, y0, x1, y1]
+ * @param {{ t: number, u: number[] | null, w?: number[] | null }[]} track samples, u = [x0, y0, x1, y1]
  * @param {{ stageW: number, winW: number, margin: number, maxSpeed: number, fps: number,
  *   times: number[], omega?: number, lookahead?: number }} o
  *   times: the instant each output frame shows (the time of the captured
@@ -72,18 +75,34 @@ export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, o
     return x1 > x0 ? [x0, u[1], x1, u[3]] : null;
   });
 
+  // Words over the fight (samples' w = [x0, x1]): framed with the fighters
+  // when both fit, otherwise the word wins. The words are K.O., WINS, ROUND,
+  // FIGHT: the beat the viewer has to read, while the fighters under them
+  // are frozen, flying off or covered by the band. The held word is one
+  // steady centred span, so following it is a pan, never a hop.
+  const words = times.map((t) => {
+    const ws = samplesAt(track, t).map((s) => (s.w ? [s.w[0], 0, s.w[1], 0] : null));
+    const u = unionRect(ws);
+    return u && [Math.max(0, u[0]), Math.min(stageW, u[2])];
+  });
+
   // The hard corridor: [lo, hi] for the left edge; a frame with nothing to
   // see is free. Too wide to fit: centred, lo = hi.
   let wide = 0;
   const lo = [];
   const hi = [];
   const centre = [];
-  for (const u of need) {
+  const wordLed = need.map(() => false);
+  const fits = (x0, x1) => clampX(x1 + margin - winW) <= clampX(x0 - margin);
+  need.forEach((n, k) => {
+    let u = n;
+    const w = words[k];
+    if (w) u = u && fits(Math.min(u[0], w[0]), Math.max(u[2], w[1])) ? [Math.min(u[0], w[0]), u[1], Math.max(u[2], w[1]), u[3]] : [w[0], 0, w[1], 0];
     if (!u) {
       lo.push(0);
       hi.push(maxX);
       centre.push(null);
-      continue;
+      return;
     }
     const c = (u[0] + u[2]) / 2;
     centre.push(clampX(c - winW / 2));
@@ -98,6 +117,21 @@ export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, o
       lo.push(x);
       hi.push(x);
     }
+  });
+
+  // Into a word the fighters cannot share the window with, the window pans
+  // at top speed (leaving the fighters' corridor for those frames) instead
+  // of hopping on the word's first frame: walking back from each word frame,
+  // a frame that cannot reach the next one's corridor takes the corridor it
+  // can.
+  for (let k = lo.length - 2; k >= 0; k--) {
+    if (!(wordLed[k + 1] || words[k + 1])) continue;
+    const a = clampX(lo[k + 1] - step);
+    const b = clampX(hi[k + 1] + step);
+    if (Math.max(lo[k], a) <= Math.min(hi[k], b)) continue;
+    lo[k] = a;
+    hi[k] = b;
+    wordLed[k] = true;
   }
 
   // The soft corridor: what the frames ahead will need, reachable at top speed.
@@ -142,6 +176,24 @@ export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, o
     x.push(pos);
   }
   return { x, wide, snaps, need };
+}
+
+/**
+ * Holds rects (x0, y0, x1, y1, or null) over time: entry i becomes the union
+ * of every rect within `hold` seconds of times[i]. Times ascending. Why: a
+ * word over the fight is drawn in steps, on and off; held, it is one steady
+ * span the camera can pan toward ahead of time.
+ */
+export function holdSpans(times, rects, hold) {
+  const out = [];
+  let lo = 0;
+  let hi = 0;
+  for (let i = 0; i < times.length; i++) {
+    while (times[lo] < times[i] - hold) lo++;
+    while (hi < times.length && times[hi] <= times[i] + hold) hi++;
+    out.push(unionRect(rects.slice(lo, hi)));
+  }
+  return out;
 }
 
 /**

@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { titleLayout } from "./frames.mjs";
-import { even, fitPixel, runs, samplesAt, stackLayout, trackCrop, unionRect } from "./layout.mjs";
+import { even, fitPixel, holdSpans, runs, samplesAt, stackLayout, trackCrop, unionRect } from "./layout.mjs";
 import { BG, BORDER, ENCODE, FPS, TAIL, endcardGraph, endcardInput, ffmpeg } from "./build.mjs";
 import { C, endCardHtml, layerHtml, textItem } from "./stills.mjs";
 
@@ -107,6 +107,8 @@ export function encodeA(plan, cut, track, out, endcardPng = null) {
 /** Fighters + margin the window keeps inside, and its top pan speed, in stage px (1280 wide). */
 const MARGIN_STAGE = 40;
 const SPEED_STAGE = 700;
+/** s a word over the fight keeps counting before and after it is drawn */
+const WORD_HOLD = 0.35;
 /** Our HUD above the stage, output px. */
 const HUD = { h: 96, gap: 16, side: 60, barY: 44, barH: 20, barW: 440, recY: 78 };
 
@@ -119,7 +121,19 @@ export function planB(meta, cut, title, dir, log = console.log) {
   const innerW = meta.box.w - 2 * BORDER;
   const innerH = meta.box.h - 2 * BORDER;
   const s = innerW / 1280; // CSS px per stage px
-  const track = (meta.track ?? []).map((t) => ({ ...t, u: t.u && [t.u[0] - BORDER, t.u[1] - BORDER, t.u[2] - BORDER, t.u[3] - BORDER] }));
+  // A word over the fight (K.O., WINS) is centred on the stage, so a window
+  // on the fighters cuts it: each sample carries the word's span (w) apart
+  // from the fighters, and trackCrop takes it in whenever both fit. It is
+  // stamped in and out in steps (its text box flickers between drawings), so
+  // the span is held WORD_HOLD s either side: one steady reason to pan,
+  // not a window hopping on every step.
+  const raw = meta.track ?? [];
+  const held = holdSpans(raw.map((t) => t.t), raw.map((t) => t.wd ?? null), WORD_HOLD);
+  const track = raw.map((t, i) => ({
+    ...t,
+    u: t.u && [t.u[0] - BORDER, t.u[1] - BORDER, t.u[2] - BORDER, t.u[3] - BORDER],
+    w: held[i] && [held[i][0] - BORDER, held[i][2] - BORDER],
+  }));
   if (!track.length) throw new Error("no fighter track in the recording (record with track: true)");
   const times = cut.picks.map((i) => meta.frames[i].t);
   const winW = innerH * (4 / 3);
@@ -187,7 +201,7 @@ export function planB(meta, cut, title, dir, log = console.log) {
     stills.push({ file, w: 240, h: 24, html: layerHtml(240, 24, [textItem({ y: 2, w: 240, text: `ROUND · ${r.v}`, size: 20, color: C.muted })]) });
   }
   return {
-    cw, ch, oy, xs, sh, stageY, hudY, barY, cutTop, into, outside,
+    cw, ch, oy, xs, sh, stageY, hudY, barY, domainY, cutTop, into, outside,
     wide: crop.wide, snaps: crop.snaps, chrome, stills, hpA, hpB, rounds, roundFiles,
     share: { stage: sh / 1920 },
   };

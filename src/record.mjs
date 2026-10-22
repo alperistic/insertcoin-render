@@ -179,6 +179,19 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
       const actors = ["a", "b"].map((s) => document.querySelector(`[data-fr="actor-${s}"]`));
       const hpEl = ["a", "b"].map((s) => document.querySelector(`[data-fr="hpf-${s}"]`));
       const roundEl = document.querySelector('[data-fr="round-box"]');
+      // The words over the fight (ROUND, FIGHT, K.O. in the slot) and the
+      // win moment (name + WINS) are centred on the stage, not on anybody, so
+      // a window on the fighters cuts them. Their text's extent is sampled
+      // apart from the fighters (wd), so B can widen for it sideways without
+      // it counting as content in the HUD band.
+      const words = ["slot", "winmo"].map((s) => document.querySelector(`[data-fr="${s}"]`));
+      const range = document.createRange();
+      const textOf = (el) => {
+        if (!el || !el.textContent.trim()) return null;
+        range.selectNodeContents(el);
+        const r = range.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 ? [r.left, r.top, r.right, r.bottom] : null;
+      };
       // The drawn part in the svg's own units, mapped to the window through
       // its screen CTM, which carries every CSS transform above it (facing,
       // tilt, the camera's zoom) — checked against getBoundingClientRect.
@@ -236,9 +249,16 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
         });
         const rd = /(\d+)/.exec(roundEl?.textContent || "");
         const r1 = (v) => Math.round(v * 10) / 10;
+        const local = (q) => q && [r1(q[0] - sr.x), r1(q[1] - sr.y), r1(q[2] - sr.x), r1(q[3] - sr.y)];
+        let wd = null;
+        for (const el of words) {
+          const q = textOf(el);
+          if (q) wd = wd ? [Math.min(wd[0], q[0]), Math.min(wd[1], q[1]), Math.max(wd[2], q[2]), Math.max(wd[3], q[3])] : q;
+        }
         return {
           t: now,
-          u: u && [r1(u[0] - sr.x), r1(u[1] - sr.y), r1(u[2] - sr.x), r1(u[3] - sr.y)],
+          u: local(u),
+          wd: local(wd),
           hp: hp.map((v) => Math.round(v * 1000) / 1000),
           round: rd ? Number(rd[1]) : null,
         };
