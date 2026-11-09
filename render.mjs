@@ -5,6 +5,11 @@
 //   node render.mjs --match <id> --candidates
 //                                   the same plus the letterbox 9:16 and candidate A
 //                                   next to B, all with the end card (local only)
+//   node render.mjs --page <url> [--out <dir>]
+//                                   record any page that mounts the fight stage the
+//                                   way the match page does (local only, e.g. the
+//                                   insertcoin dev route /preview/exhibition/<slug>);
+//                                   default out: ./out/page/
 //
 // Default (live since 22.10.2026): 16x9.mp4 with the score end card, and
 // 9x16.mp4 = candidate B (a 4:3 window that follows the fighters, our HUD
@@ -15,6 +20,8 @@
 //                             letterbox, a needs a second (phone) pass, both is local only
 //   ENDCARD=0                 no end card on either file
 //   ENDCARD_NOTE=0            leave the end card's line about the scorecards out
+//   ENDCARD_LINE=<text>       one more line on the end card under everything else
+//                             (a brand exhibition's disclosure; unset: none)
 //   PORTRAIT=legacy ENDCARD=0 the pre-22.10. files, cut exactly as before
 //
 // The app side lives in the insertcoin repo (lib/fightVideo.ts). This job
@@ -59,20 +66,21 @@ function sizeMb(file) {
 
 /**
  * What to cut. Unset env: 16x9 and B's 9x16, both with the end card.
- * @returns {{ portrait: "legacy"|"a"|"b"|"both", endcard: boolean, note: boolean, legacy: boolean }}
+ * @returns {{ portrait: "legacy"|"a"|"b"|"both", endcard: boolean, note: boolean, line?: string, legacy: boolean }}
  */
 function options({ candidates = false } = {}) {
-  if (candidates) return { portrait: "both", endcard: true, note: process.env.ENDCARD_NOTE !== "0", legacy: true };
+  const line = process.env.ENDCARD_LINE?.trim() || undefined;
+  if (candidates) return { portrait: "both", endcard: true, note: process.env.ENDCARD_NOTE !== "0", line, legacy: true };
   const portrait = (process.env.PORTRAIT || "b").toLowerCase();
   if (!["legacy", "a", "b", "both"].includes(portrait)) throw new Error(`PORTRAIT=${portrait}: b, legacy, a or both`);
-  return { portrait, endcard: process.env.ENDCARD !== "0", note: process.env.ENDCARD_NOTE !== "0", legacy: portrait === "legacy" };
+  return { portrait, endcard: process.env.ENDCARD !== "0", note: process.env.ENDCARD_NOTE !== "0", line, legacy: portrait === "legacy" };
 }
 
-async function renderOne(matchId, title, workDir, cfg = options()) {
+async function renderOne(matchId, title, workDir, cfg = options(), url = `${APP}/match/${matchId}?stage=on`) {
   if (cfg.portrait === "legacy" && !cfg.endcard) {
     // The pre-22.10. path (PORTRAIT=legacy ENDCARD=0), untouched.
     const recDir = path.join(workDir, "rec");
-    const rec = await recordFight(`${APP}/match/${matchId}?stage=on`, recDir);
+    const rec = await recordFight(url, recDir);
     const out = buildVideos(recDir, title, workDir);
     console.log(
       `${matchId}: ${out.seconds.toFixed(1)} s, ${rec.frames.length} frames captured, max gap ${out.maxGapMs} ms, ` +
@@ -80,12 +88,11 @@ async function renderOne(matchId, title, workDir, cfg = options()) {
     );
     return out;
   }
-  return renderCandidates(matchId, title, workDir, cfg);
+  return renderCandidates(matchId, title, workDir, cfg, url);
 }
 
 /** The default path: B and/or A and/or the end card, composed from the recording(s). */
-async function renderCandidates(matchId, title, workDir, cfg) {
-  const url = `${APP}/match/${matchId}?stage=on`;
+async function renderCandidates(matchId, title, workDir, cfg, url) {
   const wantA = cfg.portrait === "a" || cfg.portrait === "both";
   const wantB = cfg.portrait === "b" || cfg.portrait === "both";
   const recDir = path.join(workDir, "rec");
@@ -107,6 +114,16 @@ async function local(matchId, candidates) {
   const workDir = path.resolve("out", matchId);
   const title = { a: process.env.TITLE_A || "FIGHTER A", b: process.env.TITLE_B || "FIGHTER B" };
   await renderOne(matchId, title, workDir, candidates ? { ...options({ candidates: true }), candidates: true } : options());
+  console.log(`written to ${workDir}`);
+}
+
+/** --page: the same cut from any URL; the id in logs and file names is "page". */
+async function localPage(url, out) {
+  const parsed = new URL(url);
+  if (!/^https?:$/.test(parsed.protocol)) throw new Error(`--page ${url}: http(s) only`);
+  const workDir = path.resolve(out || path.join("out", "page"));
+  const title = { a: process.env.TITLE_A || "FIGHTER A", b: process.env.TITLE_B || "FIGHTER B" };
+  await renderOne("page", title, workDir, options(), parsed.href);
   console.log(`written to ${workDir}`);
 }
 
@@ -141,8 +158,20 @@ async function claimLoop() {
   }
 }
 
-const at = process.argv.indexOf("--match");
-const run = at > 0 ? local(process.argv[at + 1], process.argv.includes("--candidates")) : claimLoop();
+const arg = (flag) => {
+  const i = process.argv.indexOf(flag);
+  if (i < 0) return undefined;
+  const value = process.argv[i + 1];
+  // A flag without its value must never fall through to the claim loop, which
+  // talks to production and uploads (an exhibition passes --page, never that).
+  if (!value || value.startsWith("--")) throw new Error(`${flag} needs a value`);
+  return value;
+};
+const run = arg("--page")
+  ? localPage(arg("--page"), arg("--out"))
+  : arg("--match")
+    ? local(arg("--match"), process.argv.includes("--candidates"))
+    : claimLoop();
 run.catch((err) => {
   console.error(err);
   process.exit(1);
