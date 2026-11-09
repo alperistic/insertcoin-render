@@ -36,6 +36,16 @@ TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match <match-id>
 
 This writes `out/<match-id>/16x9.mp4` and `9x16.mp4` (B, both with the end card) without uploading anything. All text on the new formats is drawn as PNGs in Chromium (`src/stills.mjs`), with Press Start 2P loaded from `assets/`, so it needs no `drawtext` and no network for fonts. On the runner, the workflow's `npx playwright install --with-deps chromium` (the same Chromium that records) draws them; apt's ffmpeg has `drawtext`, which only the old letterbox uses.
 
+### Any page (`--page`)
+
+```sh
+APP_URL=http://localhost:3000 TITLE_A=CURSOR TITLE_B=DEVIN \
+  ENDCARD_LINE="AI judges · exhibition · not affiliated" \
+  node render.mjs --page "http://localhost:3000/preview/exhibition/<slug>?stage=on" --out out/<slug>
+```
+
+Records any page that mounts the fight stage like the match page does (same selectors, same cut), local only, nothing uploaded. Built for brand exhibitions: the insertcoin repo's `npm run exhibition -- <urlA> <urlB>` calls it against its dev-only route. Default out is `out/page/`.
+
 ## Formats and switches
 
 Since 22.10.2026 the default is B plus the end card. The old cut and candidate A stay switchable:
@@ -45,6 +55,7 @@ Since 22.10.2026 the default is B plus the end card. The old cut and candidate A
 | `PORTRAIT` | `b` (default), `legacy`, `a`, `both` | which 9:16 goes into `9x16.mp4`: `legacy` is the old letterbox (the 16:9 stage across the width, a third of the height); `a` needs a second recording pass; `both` writes `9x16-a.mp4` and `9x16-b.mp4` and is for `--match` only |
 | `ENDCARD` | `0` | no end card on either file |
 | `ENDCARD_NOTE` | `0` | leaves out the end card's line "The fight is drawn from the judges' scorecards." |
+| `ENDCARD_LINE` | any text | one more muted line on the end card, under everything else (a brand exhibition's disclosure); unset: none |
 
 `PORTRAIT=legacy ENDCARD=0` cuts both files exactly as before 22.10.
 
