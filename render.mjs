@@ -160,7 +160,12 @@ async function claimLoop() {
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
-  return i > 0 ? process.argv[i + 1] : undefined;
+  if (i < 0) return undefined;
+  const value = process.argv[i + 1];
+  // A flag without its value must never fall through to the claim loop, which
+  // talks to production and uploads (an exhibition passes --page, never that).
+  if (!value || value.startsWith("--")) throw new Error(`${flag} needs a value`);
+  return value;
 };
 const run = arg("--page")
   ? localPage(arg("--page"), arg("--out"))
