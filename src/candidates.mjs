@@ -13,7 +13,7 @@ const sizeMb = (file) => (fs.statSync(file).size / 1e6).toFixed(1);
 
 /**
  * @param {{ matchId: string, title: { a: string, b: string }, workDir: string,
- *   cfg: { portrait: string, endcard: boolean, note: boolean, legacy: boolean, candidates?: boolean },
+ *   cfg: { portrait: string, endcard: boolean, note: boolean, line?: string, legacy: boolean, candidates?: boolean },
  *   rec: object, recA: object | null }} o rec/recA: meta of rec/ and rec-a/ in workDir
  */
 export async function composeCandidates({ matchId, title, workDir, cfg, rec, recA }) {
@@ -46,18 +46,18 @@ export async function composeCandidates({ matchId, title, workDir, cfg, rec, rec
   const ec = {};
   if (model) {
     ec.landscape = path.join(stillDir, "endcard-16x9.png");
-    stills.push(endcardStill(model, ec.landscape, { portrait: false, note: cfg.note }));
+    stills.push(endcardStill(model, ec.landscape, { portrait: false, note: cfg.note, line: cfg.line }));
     if (a) {
       ec.a = path.join(stillDir, "endcard-9x16-a.png");
-      stills.push(endcardStill(model, ec.a, { portrait: true, domainY: a.domainY, note: cfg.note }));
+      stills.push(endcardStill(model, ec.a, { portrait: true, domainY: a.domainY, note: cfg.note, line: cfg.line }));
     }
     if (b) {
       ec.b = path.join(stillDir, "endcard-9x16-b.png");
-      stills.push(endcardStill(model, ec.b, { portrait: true, domainY: b.domainY, note: cfg.note }));
+      stills.push(endcardStill(model, ec.b, { portrait: true, domainY: b.domainY, note: cfg.note, line: cfg.line }));
     }
     if (cfg.legacy && !cfg.candidates) {
       ec.portrait = path.join(stillDir, "endcard-9x16.png");
-      stills.push(endcardStill(model, ec.portrait, { portrait: true, domainY: LEGACY_DOMAIN_Y, note: cfg.note }));
+      stills.push(endcardStill(model, ec.portrait, { portrait: true, domainY: LEGACY_DOMAIN_Y, note: cfg.note, line: cfg.line }));
     }
   }
   const legacyChrome = cfg.legacy && !hasDrawtext() ? path.join(stillDir, "chrome-legacy.png") : null;

@@ -295,8 +295,8 @@ export function encodeB(plan, cut, track, out, dir, endcardPng = null) {
 // ── End card ──────────────────────────────────────────────────────────────
 
 /** The end card page for a 9:16 (domain where that candidate has it) or the 16:9. */
-export function endcardStill(model, file, { portrait, domainY, note }) {
+export function endcardStill(model, file, { portrait, domainY, note, line }) {
   const [w, h] = portrait ? [1080, 1920] : [1920, 1080];
   const y = domainY ?? (portrait ? 1920 - 160 : 1080 - 96 - DOMAIN_SIZE);
-  return { file, w, h, html: endCardHtml(model, { w, h, domainY: y, domainSize: DOMAIN_SIZE, note }) };
+  return { file, w, h, html: endCardHtml(model, { w, h, domainY: y, domainSize: DOMAIN_SIZE, note, line }) };
 }

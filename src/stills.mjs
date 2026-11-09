@@ -65,9 +65,13 @@ export function layerHtml(w, h, items = [], boxes = []) {
  * upper-cased like the stage's own banner and the title above the video.
  *
  * @param {ReturnType<import("./layout.mjs").endCardModel>} m
- * @param {{ w: number, h: number, domainY: number, domainSize: number, note: boolean }} o
+ * `line` is one extra disclosure line under everything else (ENDCARD_LINE,
+ * e.g. a brand exhibition's "AI judges · exhibition · not affiliated"):
+ * plain text, muted, never fitted away.
+ *
+ * @param {{ w: number, h: number, domainY: number, domainSize: number, note: boolean, line?: string }} o
  */
-export function endCardHtml(m, { w, h, domainY, domainSize, note }) {
+export function endCardHtml(m, { w, h, domainY, domainSize, note, line }) {
   const portrait = h > w;
   const room = Math.min(w - 120, 1500);
   const up = (s) => s.toUpperCase();
@@ -101,8 +105,11 @@ export function endCardHtml(m, { w, h, domainY, domainSize, note }) {
   const noteHtml = note
     ? `<div class="sans" style="font-size:${portrait ? 30 : 26}px;color:${C.muted};margin-top:${portrait ? 120 : 64}px;letter-spacing:0.01em">The fight is drawn from the judges' scorecards.</div>`
     : "";
+  const lineHtml = line
+    ? `<div class="sans" data-endcard-line style="font-size:${portrait ? 30 : 26}px;color:${C.muted};margin-top:${note ? 20 : portrait ? 120 : 64}px;letter-spacing:0.01em">${esc(line)}</div>`
+    : "";
   const body = `<div class="abs" style="left:0;top:0;width:${w}px;height:${domainY}px;display:flex;flex-direction:column;align-items:center;justify-content:center">
-      ${headHtml}${tier}${scores}${cards}${decided}${noteHtml}
+      ${headHtml}${tier}${scores}${cards}${decided}${noteHtml}${lineHtml}
     </div>
     ${textItem({ x: 0, y: domainY, w, text: "insertcoin.lol", size: domainSize, color: C.chrome })}`;
   return pageHtml(w, h, body, C.bg);
