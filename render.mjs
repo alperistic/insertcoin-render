@@ -43,6 +43,7 @@ import { batchSummary, parseBatch } from "./src/batch.mjs";
 import { composeCandidates } from "./src/candidates.mjs";
 import { NoStageError, PHONE, recordFight } from "./src/record.mjs";
 import { buildSocial } from "./src/social.mjs";
+import { resolveTitle } from "./src/titles.mjs";
 
 const APP = (process.env.APP_URL || "https://insertcoin.lol").replace(/\/+$/, "");
 const SECRET = process.env.VIDEO_RENDER_SECRET || "";
@@ -90,7 +91,7 @@ async function renderOne(matchId, title, workDir, cfg = options(), url = `${APP}
     // The pre-22.10. path (PORTRAIT=legacy ENDCARD=0), untouched.
     const recDir = path.join(workDir, "rec");
     const rec = await recordFight(url, recDir);
-    const out = buildVideos(recDir, title, workDir);
+    const out = buildVideos(recDir, pickTitle(matchId, title, rec), workDir);
     console.log(
       `${matchId}: ${out.seconds.toFixed(1)} s, ${rec.frames.length} frames captured, max gap ${out.maxGapMs} ms, ` +
         `16x9 ${sizeMb(out.landscape)} MB, 9x16 ${sizeMb(out.portrait)} MB`,
@@ -116,11 +117,20 @@ async function renderCandidates(matchId, title, workDir, cfg, url) {
     console.log(`${matchId}: phone pass (A) ${((Date.now() - t) / 1000).toFixed(0)} s, ${recA.frames.length} frames`);
   }
 
+  title = pickTitle(matchId, title, rec);
   return composeCandidates({ matchId, title, workDir, cfg, rec, recA });
 }
 
 const SOCIAL = process.argv.includes("--social");
-const envTitle = () => ({ a: process.env.TITLE_A || "FIGHTER A", b: process.env.TITLE_B || "FIGHTER B" });
+/** Unset sides stay null: renderOne takes them from the recorded page (src/titles.mjs). */
+const envTitle = () => ({ a: process.env.TITLE_A || null, b: process.env.TITLE_B || null });
+
+function pickTitle(matchId, given, rec) {
+  const r = resolveTitle(given, rec);
+  if (r.warn) console.warn(`${matchId}: ${r.warn}`);
+  else if (r.from !== "given") console.log(`${matchId}: titles from the ${r.from}: ${r.title.a} vs ${r.title.b}`);
+  return r.title;
+}
 
 function social(workDir, url) {
   if (!SOCIAL) return;
