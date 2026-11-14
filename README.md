@@ -46,6 +46,42 @@ APP_URL=http://localhost:3000 TITLE_A=CURSOR TITLE_B=DEVIN \
 
 Records any page that mounts the fight stage like the match page does (same selectors, same cut), local only, nothing uploaded. Built for brand exhibitions: the insertcoin repo's `npm run exhibition -- <urlA> <urlB>` calls it against its dev-only route. Default out is `out/page/`.
 
+### Social kit (`--social`)
+
+```sh
+TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match <match-id> --social
+node src/social.mjs out/<match-id> --url https://insertcoin.lol/match/<match-id>   # from a finished render, no recording
+```
+
+Adds `out/<id>/social/`, local only, nothing posted:
+
+| file | from | limits (`src/social.mjs`, `PLATFORMS`) |
+|---|---|---|
+| `x.mp4` | `16x9.mp4` | 140 s, 512 MB |
+| `tiktok.mp4` | `9x16.mp4` | 600 s, 287 MB |
+| `reels.mp4` | `9x16.mp4` | 90 s, 250 MB |
+| `shorts.mp4` | `9x16.mp4` | 60 s, 256 MB |
+| `thumb-9x16.jpg`, `thumb-16x9.jpg` | one second before the end | the score end card when there is one |
+| `caption-facts.txt` | `candidates.json` | fighters, winner, score, tier, what decided it, length, link |
+
+A clip that fits is copied byte for byte. One that is too long keeps its end (the K.O. and the end card) and is re-encoded; one that would be too big is re-encoded at a bitrate under the cap. The caption file holds facts only, no post: the words are written by a person.
+
+### Several fights (`--batch`)
+
+```sh
+ENDCARD_LINE="AI judges · exhibition · not affiliated" node render.mjs --batch week1.txt --social
+```
+
+`week1.txt`, one fight per line, titles optional:
+
+```
+# bracket week 1
+7fb30586-bf0a-401b-9cfb-90ce8749ee11 | CORDINARE | ATEL
+http://localhost:3000/preview/exhibition/cursor-devin?stage=on | CURSOR | DEVIN
+```
+
+Each goes to `out/<id or the URL's last path segment>/`. A fight that fails is tried once more (not when the page has no stage), the rest go on, and the run ends with one line per fight and exit code 1 if any failed. The file is checked before anything records: a bad line or a fight listed twice stops the run with its line number. About 4 minutes per fight (slow motion), so a week of 7 takes about half an hour.
+
 ## Formats and switches
 
 Since 22.10.2026 the default is B plus the end card. The old cut and candidate A stay switchable:
