@@ -6,6 +6,15 @@ import path from "node:path";
 import test from "node:test";
 import { PLATFORMS, buildSocial, captionFacts, fitPlan, probe } from "../src/social.mjs";
 
+// CI runs npm test before it installs ffmpeg: the encode tests wait for it.
+let hasFfmpeg = true;
+try {
+  execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
+} catch {
+  hasFfmpeg = false;
+}
+const needsFfmpeg = { skip: !hasFfmpeg && "no ffmpeg on PATH" };
+
 test("fitPlan: a clip that fits stays whole", () => {
   assert.deepEqual(fitPlan({ seconds: 42, bytes: 20e6 }, PLATFORMS.shorts), { start: 0, seconds: 42, videoKbps: null });
 });
@@ -48,7 +57,7 @@ test("captionFacts: no end card says so instead of guessing", () => {
   assert.match(captionFacts(null), /end card not readable/);
 });
 
-test("buildSocial: every platform, thumbs and facts from a finished dir", () => {
+test("buildSocial: every platform, thumbs and facts from a finished dir", needsFfmpeg, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "social-"));
   try {
     const clip = (w, h, file) =>
@@ -77,7 +86,7 @@ test("buildSocial: every platform, thumbs and facts from a finished dir", () => 
   }
 });
 
-test("buildSocial: a missing 16x9 skips X with a note", () => {
+test("buildSocial: a missing 16x9 skips X with a note", needsFfmpeg, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "social-"));
   try {
     execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30:duration=2",
