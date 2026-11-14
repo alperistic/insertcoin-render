@@ -62,6 +62,7 @@ Adds `out/<id>/social/`, local only, nothing posted:
 | `reels.mp4` | `9x16.mp4` | 90 s, 250 MB |
 | `shorts.mp4` | `9x16.mp4` | 60 s, 256 MB |
 | `thumb-9x16.jpg`, `thumb-16x9.jpg` | one second before the end | the score end card when there is one |
+| `thumb-ko-9x16.jpg`, `thumb-ko-16x9.jpg` | `rec/meta.json` | half a second after a fighter's HP first reads 0 (the K.O. word has landed); on points, the WINS shout; none without B's track |
 | `caption-facts.txt` | `candidates.json` | fighters, winner, score, tier, what decided it, length, link |
 
 A clip that fits is copied byte for byte. One that is too long keeps its end (the K.O. and the end card) and is re-encoded; one that would be too big is re-encoded at a bitrate under the cap. The caption file holds facts only, no post: the words are written by a person.

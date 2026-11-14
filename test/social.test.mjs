@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { PLATFORMS, buildSocial, captionFacts, fitPlan, probe } from "../src/social.mjs";
+import { PLATFORMS, buildSocial, captionFacts, fitPlan, koMoment, probe } from "../src/social.mjs";
 
 // CI runs npm test before it installs ffmpeg: the encode tests wait for it.
 let hasFfmpeg = true;
@@ -70,6 +70,10 @@ test("buildSocial: every platform, thumbs and facts from a finished dir", needsF
     clip(1920, 1080, "16x9.mp4");
     clip(1080, 1920, "9x16.mp4");
     fs.writeFileSync(path.join(dir, "candidates.json"), JSON.stringify({ endcard: model }));
+    fs.mkdirSync(path.join(dir, "rec"));
+    fs.writeFileSync(path.join(dir, "rec", "meta.json"), JSON.stringify({
+      tVs: 100, tEnd: 102.5, track: [{ t: 100, hp: [1, 1], wd: null }, { t: 101, hp: [0.4, 0], wd: [1, 2, 3, 4] }],
+    }));
     const r = buildSocial(dir, { url: "https://insertcoin.lol/match/x" });
     assert.deepEqual(r.skipped, []);
     for (const name of Object.keys(PLATFORMS)) {
@@ -80,6 +84,8 @@ test("buildSocial: every platform, thumbs and facts from a finished dir", needsF
     }
     assert.ok(fs.statSync(path.join(r.dir, "thumb-9x16.jpg")).size > 1000);
     assert.ok(fs.statSync(path.join(r.dir, "thumb-16x9.jpg")).size > 1000);
+    assert.ok(fs.statSync(path.join(r.dir, "thumb-ko-9x16.jpg")).size > 1000);
+    assert.ok(fs.statSync(path.join(r.dir, "thumb-ko-16x9.jpg")).size > 1000);
     assert.match(fs.readFileSync(path.join(r.dir, "caption-facts.txt"), "utf8"), /winner: DEVIN/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -92,9 +98,39 @@ test("buildSocial: a missing 16x9 skips X with a note", needsFfmpeg, () => {
     execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30:duration=2",
       "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", path.join(dir, "9x16.mp4")]);
     const r = buildSocial(dir);
-    assert.deepEqual(r.skipped, ["x: no 16x9.mp4"]);
+    assert.deepEqual(r.skipped, ["x: no 16x9.mp4", "thumb-ko: no K.O. moment in rec/meta.json"]);
     assert.match(fs.readFileSync(path.join(r.dir, "caption-facts.txt"), "utf8"), /end card not readable/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Shaped like the real recording of 7fb30586… (14.11.2026): the FIGHT word at
+// 3.3 s, a fighter at 0 HP with the K.O. word at 30.79 s, WINS at 34.11 s.
+const real = {
+  tVs: 1000, tEnd: 1035.37,
+  track: [
+    { t: 1000.0, hp: [1, 1], wd: null },
+    { t: 1003.3, hp: [1, 1], wd: [0, 68, 1095, 128] },
+    { t: 1003.81, hp: [1, 1], wd: null },
+    { t: 1030.5, hp: [0.84, 0.05], wd: null },
+    { t: 1030.79, hp: [0.84, 0], wd: [-142, 227, 862, 404] },
+    { t: 1032.65, hp: [0.84, 0], wd: null },
+    { t: 1034.11, hp: [0.84, 0], wd: [-717, 1, 719, 404] },
+  ],
+};
+
+test("koMoment: the first frame a fighter is at 0 HP, half a second on", () => {
+  assert.ok(Math.abs(koMoment(real) - 31.29) < 1e-6);
+});
+
+test("koMoment: a decision on points falls back to the last stage word (WINS)", () => {
+  const points = { ...real, track: real.track.map((s) => ({ ...s, hp: [0.84, 0.3] })) };
+  assert.ok(Math.abs(koMoment(points) - 34.61) < 1e-6);
+});
+
+test("koMoment: never past the end of the fight, null without a track", () => {
+  assert.ok(koMoment(real, 10) < 35.37);
+  assert.equal(koMoment({ tVs: 0, tEnd: 1 }), null);
+  assert.equal(koMoment(null), null);
 });

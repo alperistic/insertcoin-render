@@ -58,6 +58,26 @@ export function captionFacts(model, { url, seconds } = {}) {
   return lines.join("\n") + "\n";
 }
 
+/**
+ * When the fight is decided, in seconds into the cut (which starts at the VS
+ * card, meta.tVs): the first tracked page frame where a fighter's HP is 0,
+ * plus `lead` so the K.O. word has landed. Without a K.O. (a decision on
+ * points), the start of the last stage word (the WINS shout). Null without
+ * a track (PORTRAIT=legacy/a) or with nothing to find.
+ * @param {{ tVs: number, tEnd: number, track?: { t: number, hp: number[], wd: unknown }[] }} meta
+ */
+export function koMoment(meta, lead = 0.5) {
+  const track = meta?.track;
+  if (!Array.isArray(track) || !track.length) return null;
+  const end = meta.tEnd - meta.tVs;
+  const at = (t) => Math.max(0, Math.min(end - 0.05, t - meta.tVs + lead));
+  const ko = track.find((s) => Array.isArray(s.hp) && s.hp.some((h) => h <= 0));
+  if (ko) return at(ko.t);
+  let last = null;
+  for (let i = 1; i < track.length; i++) if (track[i].wd && !track[i - 1].wd) last = track[i];
+  return last && last.t - meta.tVs > 0 ? at(last.t) : null;
+}
+
 export function probe(file) {
   const out = execFileSync(
     "ffprobe",
@@ -111,6 +131,17 @@ export function buildSocial(dir, { url } = {}) {
     const at = Math.max(0, probe(p).seconds - 1);
     const file = path.join(outDir, `thumb-${src.replace(".mp4", "")}.jpg`);
     ff(["-ss", at.toFixed(3), "-i", p, "-frames:v", "1", "-q:v", "2", file]);
+    files.push(file);
+  }
+  // The K.O. as a second thumbnail; the end card ones stay.
+  const metaFile = path.join(dir, "rec", "meta.json");
+  const ko = fs.existsSync(metaFile) ? koMoment(JSON.parse(fs.readFileSync(metaFile, "utf8"))) : null;
+  if (ko == null) skipped.push("thumb-ko: no K.O. moment in rec/meta.json");
+  for (const src of ko == null ? [] : ["9x16.mp4", "16x9.mp4"]) {
+    const p = path.join(dir, src);
+    if (!fs.existsSync(p)) continue;
+    const file = path.join(outDir, `thumb-ko-${src.replace(".mp4", "")}.jpg`);
+    ff(["-ss", ko.toFixed(3), "-i", p, "-frames:v", "1", "-q:v", "2", file]);
     files.push(file);
   }
   let model = null;
