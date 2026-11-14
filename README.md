@@ -34,7 +34,7 @@ npx playwright install chromium
 TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match <match-id>
 ```
 
-This writes `out/<match-id>/16x9.mp4` and `9x16.mp4` (B, both with the end card) without uploading anything. All text on the new formats is drawn as PNGs in Chromium (`src/stills.mjs`), with Press Start 2P loaded from `assets/`, so it needs no `drawtext` and no network for fonts. On the runner, the workflow's `npx playwright install --with-deps chromium` (the same Chromium that records) draws them; apt's ffmpeg has `drawtext`, which only the old letterbox uses.
+This writes `out/<match-id>/16x9.mp4` and `9x16.mp4` (B, both with the end card) without uploading anything. `TITLE_A`/`TITLE_B` are optional: a side left unset takes the name off the recorded page (its HUD's `fname-a`/`fname-b`, challenger left, else the end card's columns; `src/titles.mjs`), upper-case. When neither reads, the cut says FIGHTER A / FIGHTER B and the log warns. All text on the new formats is drawn as PNGs in Chromium (`src/stills.mjs`), with Press Start 2P loaded from `assets/`, so it needs no `drawtext` and no network for fonts. On the runner, the workflow's `npx playwright install --with-deps chromium` (the same Chromium that records) draws them; apt's ffmpeg has `drawtext`, which only the old letterbox uses.
 
 ### Any page (`--page`)
 
@@ -73,7 +73,7 @@ A clip that fits is copied byte for byte. One that is too long keeps its end (th
 ENDCARD_LINE="AI judges · exhibition · not affiliated" node render.mjs --batch week1.txt --social
 ```
 
-`week1.txt`, one fight per line, titles optional:
+`week1.txt`, one fight per line, titles optional (without them, the names come off the page, see above):
 
 ```
 # bracket week 1
