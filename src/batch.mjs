@@ -43,6 +43,6 @@ export function parseBatch(text) {
 /** One line per fight for the end of a run. */
 export function batchSummary(results) {
   const ok = results.filter((r) => r.ok).length;
-  const rows = results.map((r) => `  ${r.ok ? "ok    " : "FAILED"} ${r.slug}  ${r.ok ? `${r.seconds.toFixed(0)} s render` : r.error}`);
+  const rows = results.map((r) => `  ${r.ok ? "ok    " : "FAILED"} ${r.slug}  ${r.ok ? `${r.seconds.toFixed(0)} s render` : String(r.error).split("\n")[0]}`);
   return [`batch: ${ok}/${results.length} rendered`, ...rows].join("\n");
 }

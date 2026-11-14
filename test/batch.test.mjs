@@ -35,8 +35,11 @@ test("batchSummary: counts and names the failures", () => {
   const s = batchSummary([
     { slug: "a", ok: true, seconds: 241.2 },
     { slug: "b", ok: false, error: "no fight stage on the page" },
+    { slug: "c", ok: false, error: "page.goto: net::ERR_CONNECTION_REFUSED\nCall log:\n  - navigating" },
   ]);
-  assert.match(s, /^batch: 1\/2 rendered$/m);
+  assert.match(s, /FAILED c {2}page\.goto: net::ERR_CONNECTION_REFUSED$/m);
+  assert.doesNotMatch(s, /Call log/);
+  assert.match(s, /^batch: 1\/3 rendered$/m);
   assert.match(s, /ok {5}a {2}241 s render/);
   assert.match(s, /FAILED b {2}no fight stage on the page/);
 });
