@@ -73,7 +73,7 @@ A clip that fits is copied byte for byte. One that is too long keeps its end (th
 ENDCARD_LINE="AI judges · exhibition · not affiliated" node render.mjs --batch week1.txt --social
 ```
 
-`week1.txt`, one fight per line, titles optional (without them, the names come off the page, see above):
+`week1.txt`, one fight per line, titles optional (without them, the names come off the page, see above; `TITLE_A`/`TITLE_B` from the env are ignored in a batch):
 
 ```
 # bracket week 1

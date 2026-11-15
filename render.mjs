@@ -159,7 +159,8 @@ async function localBatch(file) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         console.log(`batch ${i + 1}/${jobs.length}: ${job.slug}${attempt > 1 ? " (second try)" : ""}`);
-        await renderOne(job.slug, job.title ?? envTitle(), workDir, cfg, url);
+        // No env titles here: TITLE_A/TITLE_B would put the same two names on every fight.
+        await renderOne(job.slug, job.title, workDir, cfg, url);
         social(workDir, job.url ?? `${APP}/match/${job.matchId}`);
         error = null;
         break;
