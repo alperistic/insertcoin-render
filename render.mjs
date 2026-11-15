@@ -10,6 +10,13 @@
 //                                   way the match page does (local only, e.g. the
 //                                   insertcoin dev route /preview/exhibition/<slug>);
 //                                   default out: ./out/page/
+//   node render.mjs --batch <file>  several fights in one run (src/batch.mjs): one
+//                                   match id or page URL per line, titles after " | ";
+//                                   each to ./out/<id or slug>/, a failed one is tried
+//                                   once more, the rest go on (local only)
+//   --social                        with --match, --page or --batch: also the files per
+//                                   platform, thumbnails and caption facts in
+//                                   <out>/social/ (src/social.mjs); nothing is posted
 //
 // Default (live since 22.10.2026): 16x9.mp4 with the score end card, and
 // 9x16.mp4 = candidate B (a 4:3 window that follows the fighters, our HUD
@@ -32,8 +39,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildVideos } from "./src/build.mjs";
+import { batchSummary, parseBatch } from "./src/batch.mjs";
 import { composeCandidates } from "./src/candidates.mjs";
 import { NoStageError, PHONE, recordFight } from "./src/record.mjs";
+import { buildSocial } from "./src/social.mjs";
+import { resolveTitle } from "./src/titles.mjs";
 
 const APP = (process.env.APP_URL || "https://insertcoin.lol").replace(/\/+$/, "");
 const SECRET = process.env.VIDEO_RENDER_SECRET || "";
@@ -81,7 +91,7 @@ async function renderOne(matchId, title, workDir, cfg = options(), url = `${APP}
     // The pre-22.10. path (PORTRAIT=legacy ENDCARD=0), untouched.
     const recDir = path.join(workDir, "rec");
     const rec = await recordFight(url, recDir);
-    const out = buildVideos(recDir, title, workDir);
+    const out = buildVideos(recDir, pickTitle(matchId, title, rec), workDir);
     console.log(
       `${matchId}: ${out.seconds.toFixed(1)} s, ${rec.frames.length} frames captured, max gap ${out.maxGapMs} ms, ` +
         `16x9 ${sizeMb(out.landscape)} MB, 9x16 ${sizeMb(out.portrait)} MB`,
@@ -107,14 +117,63 @@ async function renderCandidates(matchId, title, workDir, cfg, url) {
     console.log(`${matchId}: phone pass (A) ${((Date.now() - t) / 1000).toFixed(0)} s, ${recA.frames.length} frames`);
   }
 
+  title = pickTitle(matchId, title, rec);
   return composeCandidates({ matchId, title, workDir, cfg, rec, recA });
+}
+
+const SOCIAL = process.argv.includes("--social");
+/** Unset sides stay null: renderOne takes them from the recorded page (src/titles.mjs). */
+const envTitle = () => ({ a: process.env.TITLE_A || null, b: process.env.TITLE_B || null });
+
+function pickTitle(matchId, given, rec) {
+  const r = resolveTitle(given, rec);
+  if (r.warn) console.warn(`${matchId}: ${r.warn}`);
+  else if (r.from !== "given") console.log(`${matchId}: titles from the ${r.from}: ${r.title.a} vs ${r.title.b}`);
+  return r.title;
+}
+
+function social(workDir, url) {
+  if (!SOCIAL) return;
+  const r = buildSocial(workDir, { url });
+  console.log(`social kit: ${r.files.length} files in ${r.dir}`);
 }
 
 async function local(matchId, candidates) {
   const workDir = path.resolve("out", matchId);
-  const title = { a: process.env.TITLE_A || "FIGHTER A", b: process.env.TITLE_B || "FIGHTER B" };
-  await renderOne(matchId, title, workDir, candidates ? { ...options({ candidates: true }), candidates: true } : options());
+  await renderOne(matchId, envTitle(), workDir, candidates ? { ...options({ candidates: true }), candidates: true } : options());
+  social(workDir, `${APP}/match/${matchId}`);
   console.log(`written to ${workDir}`);
+}
+
+/** --batch: every fight in the file, one after the other; one failure does not stop the rest. */
+async function localBatch(file) {
+  const jobs = parseBatch(fs.readFileSync(file, "utf8"));
+  const cfg = options();
+  console.log(`batch: ${jobs.length} fights from ${file}`);
+  const results = [];
+  for (const [i, job] of jobs.entries()) {
+    const workDir = path.resolve("out", job.slug);
+    const url = job.url ?? `${APP}/match/${job.matchId}?stage=on`;
+    const t = Date.now();
+    let error = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(`batch ${i + 1}/${jobs.length}: ${job.slug}${attempt > 1 ? " (second try)" : ""}`);
+        // No env titles here: TITLE_A/TITLE_B would put the same two names on every fight.
+        await renderOne(job.slug, job.title, workDir, cfg, url);
+        social(workDir, job.url ?? `${APP}/match/${job.matchId}`);
+        error = null;
+        break;
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+        console.error(`batch ${job.slug}: ${error}`);
+        if (err instanceof NoStageError) break; // the page has no fight: a retry will not find one
+      }
+    }
+    results.push({ slug: job.slug, ok: !error, error, seconds: (Date.now() - t) / 1000 });
+  }
+  console.log(batchSummary(results));
+  if (results.some((r) => !r.ok)) process.exitCode = 1;
 }
 
 /** --page: the same cut from any URL; the id in logs and file names is "page". */
@@ -122,8 +181,8 @@ async function localPage(url, out) {
   const parsed = new URL(url);
   if (!/^https?:$/.test(parsed.protocol)) throw new Error(`--page ${url}: http(s) only`);
   const workDir = path.resolve(out || path.join("out", "page"));
-  const title = { a: process.env.TITLE_A || "FIGHTER A", b: process.env.TITLE_B || "FIGHTER B" };
-  await renderOne("page", title, workDir, options(), parsed.href);
+  await renderOne("page", envTitle(), workDir, options(), parsed.href);
+  social(workDir, parsed.href);
   console.log(`written to ${workDir}`);
 }
 
@@ -167,11 +226,13 @@ const arg = (flag) => {
   if (!value || value.startsWith("--")) throw new Error(`${flag} needs a value`);
   return value;
 };
-const run = arg("--page")
-  ? localPage(arg("--page"), arg("--out"))
-  : arg("--match")
-    ? local(arg("--match"), process.argv.includes("--candidates"))
-    : claimLoop();
+const run = arg("--batch")
+  ? localBatch(arg("--batch"))
+  : arg("--page")
+    ? localPage(arg("--page"), arg("--out"))
+    : arg("--match")
+      ? local(arg("--match"), process.argv.includes("--candidates"))
+      : claimLoop();
 run.catch((err) => {
   console.error(err);
   process.exit(1);
