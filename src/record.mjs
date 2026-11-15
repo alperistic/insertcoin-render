@@ -304,7 +304,9 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
       opts.measure || opts.grow || opts.track
         ? await page.evaluate(() => ({ rects: window.__rec.rects, grow: window.__rec.grow, track: window.__rec.track }))
         : {};
-    const hud = opts.track ? await readHud(page) : null;
+    // Always read: the names fill in missing titles (src/titles.mjs), also on
+    // the legacy cut, which does not track. Never fails the render.
+    const hud = await readHud(page).catch(() => null);
     const endcard = opts.readEnd ? await readEndCard(page) : null;
     if (!marks.vs) console.warn("VS card not seen; cutting at a fixed delay after the click");
     const box = marks.box ?? settled;
@@ -329,8 +331,8 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
     }
     if (opts.track) {
       meta.track = (extra.track ?? []).map((s) => ({ ...s, t: page_(s.t / 1000) }));
-      meta.hud = hud;
     }
+    meta.hud = hud;
     if (opts.readEnd) meta.endcard = endcard;
     fs.writeFileSync(path.join(outDir, "meta.json"), JSON.stringify(meta));
     return meta;
