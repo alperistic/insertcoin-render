@@ -117,7 +117,16 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
     // measured in that same frame.
     await page.evaluate(({ measure, grow, track }) => {
       const w = window;
-      w.__rec = { vs: 0, end: 0, box: null, rects: null, grow: grow ? {} : null, track: track ? [] : null };
+      w.__rec = { vs: 0, end: 0, box: null, rects: null, grow: grow ? {} : null, track: track ? [] : null, cues: [] };
+      // Every sound the stage asks for (the app's FightReplay dispatches
+      // "fr:cue" with lib/fight/sfx.ts's cue as detail), stamped on the real
+      // clock like the frames. The screencast records no audio; the video's
+      // sound is rebuilt from these (src/score.mjs). An app that does not
+      // send them leaves this empty and the score falls back to HP and rounds.
+      document.addEventListener("fr:cue", (e) => {
+        const d = e.detail;
+        if (d && typeof d.kind === "string") w.__rec.cues.push({ ...d, t: w.__realNow() });
+      });
       const root = document.querySelector(".fr-root");
       const stage = document.querySelector(".fr-box");
       const half = document.querySelector(".fr-vs-l");
@@ -299,7 +308,14 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
     await page.waitForFunction(() => window.__rec.end > 0, null, { timeout: MAX_FIGHT_MS / SLOW, polling: 100 });
     await page.waitForTimeout(300);
     await cdp.send("Page.stopScreencast");
-    const marks = await page.evaluate(() => ({ vs: window.__rec.vs, end: window.__rec.end, box: window.__rec.box }));
+    const marks = await page.evaluate(() => ({
+      vs: window.__rec.vs,
+      end: window.__rec.end,
+      box: window.__rec.box,
+      cues: window.__rec.cues,
+      // The stage the fight is on, when the app names one (data-venue on .fr-root).
+      venue: document.querySelector(".fr-root")?.getAttribute("data-venue") ?? null,
+    }));
     const extra =
       opts.measure || opts.grow || opts.track
         ? await page.evaluate(() => ({ rects: window.__rec.rects, grow: window.__rec.grow, track: window.__rec.track }))
@@ -333,6 +349,8 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
       meta.track = (extra.track ?? []).map((s) => ({ ...s, t: page_(s.t / 1000) }));
     }
     meta.hud = hud;
+    meta.cues = (marks.cues ?? []).map((c) => ({ ...c, t: page_(c.t / 1000) }));
+    if (marks.venue) meta.venue = marks.venue;
     if (opts.readEnd) meta.endcard = endcard;
     fs.writeFileSync(path.join(outDir, "meta.json"), JSON.stringify(meta));
     return meta;

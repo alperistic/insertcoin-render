@@ -52,14 +52,20 @@ export function samplesAt(track, t, { slack = 0.012, ahead = 0.004 } = {}) {
  * only where it fits together with the fighters; frames where it does not
  * are counted in `wordCut`.
  *
+ * With `hold` the window does not follow at all: it is planned over the whole
+ * fight as a few fixed framings with pans between them (holdPath below).
+ * Following re-centred the window on every lunge and its recoil, on top of
+ * the stage's own camera.
+ *
  * @param {{ t: number, u: number[] | null, w?: number[] | null }[]} track samples, u = [x0, y0, x1, y1]
  * @param {{ stageW: number, winW: number, margin: number, maxSpeed: number, fps: number,
- *   times: number[], omega?: number, lookahead?: number }} o
+ *   times: number[], omega?: number, lookahead?: number, hold?: number, slack?: number }} o
+ *   hold: seconds a pan between two framings takes (0: follow); slack: play around the centre of a pair too wide to fit
  *   times: the instant each output frame shows (the time of the captured
  *   frame picked for it); maxSpeed in units per second
- * @returns {{ x: number[], wide: number, snaps: number, wordCut: number, need: (number[] | null)[] }}
+ * @returns {{ x: number[], wide: number, snaps: number, wordCut: number, need: (number[] | null)[], fit: boolean[], holds?: number }}
  */
-export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, omega = 6, lookahead = 0.6 }) {
+export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, omega = 6, lookahead = 0.6, hold = 0, slack = 0 }) {
   const maxX = Math.max(0, stageW - winW);
   const clampX = (v) => Math.min(maxX, Math.max(0, v));
   const dt = 1 / fps;
@@ -90,6 +96,7 @@ export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, o
   let wide = 0;
   const lo = [];
   const hi = [];
+  const fit = [];
   const centre = [];
   let wordCut = 0;
   const fits = (x0, x1) => clampX(x1 + margin - winW) <= clampX(x0 - margin);
@@ -103,37 +110,44 @@ export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, o
       lo.push(0);
       hi.push(maxX);
       centre.push(null);
+      fit.push(true);
       return;
     }
     const c = (u[0] + u[2]) / 2;
     centre.push(clampX(c - winW / 2));
     const a = clampX(u[2] + margin - winW);
     const b = clampX(u[0] - margin);
+    fit.push(a <= b);
     if (a <= b) {
       lo.push(a);
       hi.push(b);
     } else {
+      // Too wide to fit: around the centre, with a little play (slack) so a
+      // pair that does not fit anyway is not followed breath by breath.
       wide++;
       const x = clampX(c - winW / 2);
-      lo.push(x);
-      hi.push(x);
+      lo.push(clampX(x - slack));
+      hi.push(clampX(x + slack));
     }
   });
+
+  if (hold > 0) return { ...holdPath({ lo, hi, centre, fps, hold, step }), wide, wordCut, need, fit };
 
   // The soft corridor: what the frames ahead will need, reachable at top speed.
   const n = need.length;
   const look = Math.round(lookahead * fps);
+  const base = [lo, hi];
   const slo = lo.slice();
   const shi = hi.slice();
   for (let k = 0; k < n; k++) {
     for (let j = k + 1; j < Math.min(n, k + look + 1); j++) {
       const reach = step * (j - k);
-      slo[k] = Math.max(slo[k], lo[j] - reach);
-      shi[k] = Math.min(shi[k], hi[j] + reach);
+      slo[k] = Math.max(slo[k], base[0][j] - reach);
+      shi[k] = Math.min(shi[k], base[1][j] + reach);
     }
     if (slo[k] > shi[k]) {
-      slo[k] = lo[k];
-      shi[k] = hi[k];
+      slo[k] = base[0][k];
+      shi[k] = base[1][k];
     }
   }
 
@@ -161,7 +175,111 @@ export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, o
     pos = kept;
     x.push(pos);
   }
-  return { x, wide, snaps, wordCut, need };
+  return { x, wide, snaps, wordCut, need, fit };
+}
+
+/**
+ * The camera as somebody would operate it who has seen the fight: a few fixed
+ * framings, each held for as long as it shows everything, and a pan from one
+ * to the next that starts before the fighters leave the frame.
+ *
+ * The frames are cut into the longest runs one window position can cover
+ * (the corridors' intersection stays non-empty); each run stands where its
+ * fighters are centred best, or where the run before stood if that still
+ * does. The steps between runs are then rounded off by a raised-cosine
+ * window `hold` seconds wide, centred on the step (so half the pan is
+ * anticipation), and what is left outside a frame's corridor is pushed in.
+ *
+ * @returns {{ x: number[], snaps: number, holds: number }}
+ */
+function holdPath({ lo, hi, centre, fps, hold, step }) {
+  const n = lo.length;
+  const runsOf = [];
+  let k = 0;
+  while (k < n) {
+    let L = lo[k];
+    let H = hi[k];
+    let j = k + 1;
+    while (j < n && Math.max(L, lo[j]) <= Math.min(H, hi[j])) {
+      L = Math.max(L, lo[j]);
+      H = Math.min(H, hi[j]);
+      j++;
+    }
+    const cs = centre.slice(k, j).filter((c) => c !== null).sort((p, q) => p - q);
+    runsOf.push({ from: k, to: j, L, H, c: cs.length ? cs[cs.length >> 1] : null });
+    k = j;
+  }
+  const g = new Array(n);
+  let prev = null;
+  for (const r of runsOf) {
+    const want = r.c === null ? (prev ?? (r.L + r.H) / 2) : r.c;
+    const x = prev !== null && prev >= r.L && prev <= r.H ? prev : Math.min(r.H, Math.max(r.L, want));
+    for (let i = r.from; i < r.to; i++) g[i] = x;
+    prev = x;
+  }
+  // Zero-phase smoothing of the steps: a Hann window, edges held.
+  const half = Math.max(1, Math.round((hold * fps) / 2));
+  const wts = [];
+  let sum = 0;
+  for (let i = -half; i <= half; i++) {
+    const w = 0.5 * (1 + Math.cos((Math.PI * i) / (half + 1)));
+    wts.push(w);
+    sum += w;
+  }
+  const x = [];
+  let snaps = 0;
+  for (let i = 0; i < n; i++) {
+    let v = 0;
+    for (let d = -half; d <= half; d++) v += g[Math.min(n - 1, Math.max(0, i + d))] * wts[d + half];
+    v = Math.min(hi[i], Math.max(lo[i], v / sum));
+    if (i > 0 && Math.abs(v - x[i - 1]) > step + 1e-9) snaps++;
+    x.push(v);
+  }
+  return { x, snaps, holds: runsOf.length };
+}
+
+/**
+ * Candidate B's opening: the cut starts on the VS card in the wide window
+ * (the card is drawn for the whole stage) and pushes in to the close one when
+ * the fight starts. 0 = wide, 1 = close, per output frame; a smoothstep of
+ * `seconds` that starts `lead` before `tOpen`. No `tOpen`: close throughout.
+ */
+export function openingEase(times, tOpen, { seconds = 0.7, lead = 0.2 } = {}) {
+  if (tOpen === null || tOpen === undefined) return times.map(() => 1);
+  return times.map((t) => {
+    const p = Math.min(1, Math.max(0, (t - (tOpen - lead)) / seconds));
+    return p * p * (3 - 2 * p);
+  });
+}
+
+/**
+ * 0 until the pull-out starts at tClose, 1 once the window is wide again.
+ * @param {number[]} times @param {number | null} tClose
+ */
+export function closingEase(times, tClose, { seconds = 0.8 } = {}) {
+  if (tClose === null || tClose === undefined) return times.map(() => 0);
+  return times.map((t) => {
+    const p = Math.min(1, Math.max(0, (t - tClose) / seconds));
+    return p * p * (3 - 2 * p);
+  });
+}
+
+/**
+ * Where the fight's last picture starts being wider than the window: the
+ * first frame of the run of frames that do not fit (gaps up to `gap` frames
+ * allowed) which reaches the last frame and is at least `min` frames long.
+ * @param {boolean[]} fit @returns {number} frame index, or -1
+ */
+export function closingFrame(fit, { gap = 18, min = 48 } = {}) {
+  let start = -1;
+  let open = 0;
+  for (let k = fit.length - 1; k >= 0; k--) {
+    if (!fit[k]) {
+      start = k;
+      open = 0;
+    } else if (++open > gap) break;
+  }
+  return start >= 0 && fit.length - start >= min ? start : -1;
 }
 
 /**

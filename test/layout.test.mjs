@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decidedInColumns, endCardModel, even, solidColor, fitPixel, holdSpans, parseDecided, tierLabel, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
+import { closingEase, closingFrame, decidedInColumns, endCardModel, even, solidColor, fitPixel, holdSpans, openingEase, parseDecided, tierLabel, runs, stackLayout, stageShare, trackCrop, unionRect } from "../src/layout.mjs";
 
 const FPS = 60;
 const W = { stageW: 716, winW: 533, margin: 22, maxSpeed: 340, fps: FPS };
@@ -197,4 +197,67 @@ test("solidColor reads the page's computed colours and lays translucent ones ove
   assert.equal(solidColor("rgba(0, 0, 0, 0)"), null);
   assert.equal(solidColor(""), null);
   assert.equal(solidColor("linear-gradient(red, blue)"), null);
+});
+
+// ── The planned camera (hold), the push-in and the pull-out ─────────────────
+const SQ = { stageW: 716, winW: 400, margin: 11, maxSpeed: 340, fps: FPS, hold: 0.8, slack: 16 };
+
+test("hold: a lunge and its recoil inside the frame do not move the window at all", () => {
+  const track = trackOf(600, (t) => {
+    const lunge = t > 3 && t < 3.6 ? 40 * Math.sin(((t - 3) / 0.6) * Math.PI) : 0;
+    return [220 + lunge, 500 + lunge];
+  });
+  const { x, holds, snaps } = trackCrop(track, { ...SQ, times: frames(600) });
+  assert.equal(holds, 1);
+  assert.equal(snaps, 0);
+  assert.ok(x.every((v) => v === x[0]));
+});
+
+test("hold: fighters who cross the stage get two framings and one pan that starts before they leave", () => {
+  const track = trackOf(600, (t) => {
+    const p = Math.min(1, Math.max(0, (t - 4) / 1.5));
+    return [40 + 330 * p, 300 + 330 * p];
+  });
+  const { x, need, holds, snaps } = trackCrop(track, { ...SQ, times: frames(600) });
+  assert.ok(holds >= 2 && holds <= 3, `${holds} framings`);
+  assert.equal(snaps, 0);
+  need.forEach((u, k) => assert.ok(u[0] >= x[k] - 1e-6 && u[2] <= x[k] + SQ.winW + 1e-6, `frame ${k} keeps both in`));
+  const moving = x.filter((v, k) => k > 0 && Math.abs(v - x[k - 1]) > 1e-9).length;
+  assert.ok(moving < 600 * 0.35, `the window moves on ${moving} of 600 frames`);
+  // Where the first framing stops showing both: the pan is under way before that.
+  const lost = need.findIndex((u) => u[2] > x[0] + SQ.winW - SQ.margin);
+  assert.ok(lost > 4 * FPS && x[lost - 6] !== x[0], "the pan starts before the fighters reach the edge");
+  assert.equal(x[0], x[3 * FPS]);
+});
+
+test("hold: a pair too wide for the window is centred, with play, and counted", () => {
+  const track = trackOf(120, (t) => [100 + 6 * Math.sin(t * 9), 600 + 6 * Math.sin(t * 9)]);
+  const { x, wide, fit } = trackCrop(track, { ...SQ, times: frames(120) });
+  assert.equal(wide, 120);
+  assert.ok(fit.every((f) => !f));
+  assert.ok(x.every((v) => v === x[0]), "a pair breathing inside the play does not move the window");
+  assert.ok(Math.abs(x[0] + SQ.winW / 2 - 350) <= SQ.slack + 6);
+});
+
+test("openingEase and closingEase: wide, in, out again, and monotone", () => {
+  const times = frames(600);
+  const open = openingEase(times, 2, { lead: 0 });
+  assert.equal(open[0], 0);
+  assert.equal(open[2 * FPS], 0);
+  assert.equal(open[Math.round(2.7 * FPS) + 1], 1);
+  for (let k = 1; k < open.length; k++) assert.ok(open[k] >= open[k - 1]);
+  assert.ok(openingEase(times, null).every((e) => e === 1), "nothing to open on: close throughout");
+  const close = closingEase(times, 8);
+  assert.equal(close[8 * FPS], 0);
+  assert.equal(close.at(-1), 1);
+  assert.ok(closingEase(times, null).every((e) => e === 0));
+});
+
+test("closingFrame: the start of the last picture that does not fit, or -1", () => {
+  const fit = (n, bad) => Array.from({ length: n }, (_, k) => !bad(k));
+  assert.equal(closingFrame(fit(600, (k) => k >= 480)), 480);
+  assert.equal(closingFrame(fit(600, (k) => (k >= 480 && k < 500) || k >= 510)), 480, "a short gap is the same picture");
+  assert.equal(closingFrame(fit(600, (k) => k >= 100 && k < 200)), -1, "wide in the middle is not an ending");
+  assert.equal(closingFrame(fit(600, (k) => k >= 580)), -1, "too short to pull out for");
+  assert.equal(closingFrame(fit(600, () => false)), -1);
 });
