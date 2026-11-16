@@ -307,7 +307,7 @@ function renderSection(bus, T, plan, sec) {
       const d = T.roots[c] + shape[(lvl === 0 ? step / 2 : step) % shape.length];
       const fade = lvl === 0 ? Math.min(1, 0.25 + (step / Math.max(1, steps)) * 0.9) : 1;
       bus.arp.add(
-        note({ wave: "pulse", duty: 0.125, hz: midiHz(degMidi(T.tonic + 12, d >= 9 ? d - 7 : d, T.sharp[c])), dur: s16 * (lvl === 0 ? 1.6 : 0.8), gain: 0.3 * fade, env: ARP_ENV }),
+        note({ wave: "pulse", duty: 0.25, hz: midiHz(degMidi(T.tonic + 12, d >= 9 ? d - 7 : d, T.sharp[c])), dur: s16 * (lvl === 0 ? 1.6 : 0.8), gain: 0.24 * fade, env: ARP_ENV }),
         at(step), 1, step % 2 ? 0.35 : -0.35,
       );
     }
@@ -327,7 +327,7 @@ function renderSection(bus, T, plan, sec) {
           const dur = (Math.min(end, steps) - step) * s16;
           const hz = midiHz(degMidi(leadTonic, d, T.sharp[c]));
           bus.lead.add(note({ wave: "pulse", duty: 0.25, hz, dur: dur * 0.92, gain: 0.42, env: LEAD_ENV, vib: len >= 3 ? vib : null }), at(step), 1, -0.08);
-          if (lvl >= 3) bus.lead.add(note({ wave: "pulse", duty: 0.5, hz: hz * 2, dur: dur * 0.8, gain: 0.1, env: LEAD_ENV }), at(step), 1, 0.2);
+          if (lvl >= 3) bus.lead.add(note({ wave: "pulse", duty: 0.5, hz: hz * 2, dur: dur * 0.8, gain: 0.06, env: LEAD_ENV }), at(step), 1, 0.2);
         }
         step = end;
       }
@@ -471,6 +471,9 @@ function renderCue(sfx, c, t, v, seed) {
   }
 }
 
+/** Low-pass corners per bus, Hz (Mix.lowpass). The hits are not filtered: they are the app's own. */
+const TONE = { arp: 3000, lead: 4200, drums: 7000 };
+
 /** How far the music steps back for a landing, and for how long (seconds). */
 const DUCK = { hit: [0.78, 0.1], big: [0.55, 0.16], crit: [0.45, 0.2], finisher: [0, 0], bell: [0.8, 0.2] };
 
@@ -485,6 +488,11 @@ export function renderScore(plan) {
   const bus = { bass: new Mix(seconds), arp: new Mix(seconds), lead: new Mix(seconds), drums: new Mix(seconds), fx: new Mix(seconds) };
   for (const sec of plan.sections) renderSection(bus, T, plan, sec);
   bus.lead.echo((60 / T.bpm) * 0.75, 0.32, 0.2);
+  // Softer on top (16.11.2026, the first listen: "almost too shrill"): the
+  // arpeggio and the lead lose their fizz, the hats keep a little air.
+  bus.arp.lowpass(TONE.arp);
+  bus.lead.lowpass(TONE.lead);
+  bus.drums.lowpass(TONE.drums);
 
   const music = new Mix(seconds);
   music.addMix(bus.bass);
@@ -519,9 +527,10 @@ export function renderScore(plan) {
   coin.add(note({ wave: "pulse", duty: 0.25, hz: midiHz(degMidi(leadTonic, -3)), dur: 0.07, gain: 0.4, env: LEAD_ENV }), 0.02, 1);
   coin.add(note({ wave: "pulse", duty: 0.25, hz: midiHz(degMidi(leadTonic, 0)), dur: 0.42, gain: 0.4, env: { ...LEAD_ENV, d: 0.25, s: 0.2 } }), 0.1, 1);
   coin.echo(0.19, 0.3, 0.25);
+  coin.lowpass(TONE.lead);
   music.addMix(coin);
 
-  const MUSIC_GAIN = 0.34;
+  const MUSIC_GAIN = 0.42;
   mix.addMix(music, g);
   mix.scale(MUSIC_GAIN);
   const tail = new Mix(seconds);
@@ -536,6 +545,7 @@ export function renderScore(plan) {
     for (const b of [ab.bass, ab.arp, ab.drums]) tail.addMix(b, ag);
   }
   if (plan.jingle) renderJingle(tail, T, plan.jingle);
+  tail.lowpass(TONE.lead);
   tail.scale(MUSIC_GAIN * 1.1);
   mix.addMix(tail);
 

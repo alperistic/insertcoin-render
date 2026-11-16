@@ -48,7 +48,9 @@ export const ENCODE = [
   "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-tune", "animation",
   "-profile:v", "high", "-pix_fmt", "yuv420p", "-r", String(FPS),
   "-color_range", "tv",
-  "-c:a", "aac", "-b:a", "160k",
+  // The track is AAC already (musicTrack): copied, not encoded a second
+  // time, which pushed its true peak over the ceiling it was set to.
+  "-c:a", "copy",
   "-movflags", "+faststart", "-shortest",
 ];
 
@@ -107,7 +109,8 @@ export function prepareCut(recDir) {
 }
 
 /** Where the mix sits: loud enough for a feed, with the hits on top of the music. */
-const LOUDNESS = { lufs: -16, peak: -1.5 };
+// peak: on the WAV, before AAC, whose encode adds up to ~0.8 dB of true peak.
+const LOUDNESS = { lufs: -16, peak: -2.0 };
 
 /**
  * The fight's sound (score.mjs): a score cut to this recording and every cue
@@ -147,7 +150,7 @@ export function musicTrack(recDir, seconds, name = "track.m4a", opts = {}) {
   const inTp = Number(read?.input_tp);
   const gain = Number.isFinite(inI) && Number.isFinite(inTp) ? Math.min(LOUDNESS.lufs - inI, LOUDNESS.peak - inTp) : 0;
   const track = path.join(recDir, name);
-  ffmpeg(["-i", wav, "-af", `volume=${gain.toFixed(2)}dB,aresample=48000`, "-c:a", "aac", "-b:a", "192k", track]);
+  ffmpeg(["-i", wav, "-af", `volume=${gain.toFixed(2)}dB,aresample=48000`, "-c:a", "aac", "-b:a", "160k", track]);
   (opts.log ?? console.log)(
     `sound: ${theme}, ${plan.sections.length} sections, ${plan.cues.length} cues (${sent ? "from the stage" : "from HP and rounds"}), ` +
       `${Number.isFinite(inI) ? (inI + gain).toFixed(1) : "?"} LUFS`,

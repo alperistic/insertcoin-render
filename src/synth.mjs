@@ -95,6 +95,23 @@ export class Mix {
     }
   }
 
+  /**
+   * Two one-pole low-passes in a row (12 dB an octave above `hz`): takes the
+   * fizz off the pulse voices' upper harmonics, the way a TV speaker did.
+   */
+  lowpass(hz) {
+    const a = 1 - Math.exp((-2 * Math.PI * hz) / SR);
+    for (const ch of [this.l, this.r]) {
+      let y1 = 0;
+      let y2 = 0;
+      for (let i = 0; i < this.n; i++) {
+        y1 += a * (ch[i] - y1);
+        y2 += a * (y1 - y2);
+        ch[i] = y2;
+      }
+    }
+  }
+
   peak() {
     let p = 0;
     for (let i = 0; i < this.n; i++) p = Math.max(p, Math.abs(this.l[i]), Math.abs(this.r[i]));

@@ -114,8 +114,9 @@ There is no music file. `src/score.mjs` writes a track for each cut and `src/syn
 
 - **One sound, four pieces.** `garage`, `rooftop`, `orbit` and `final` differ in key, tempo, bass and drums, and share one eight-note motif: every lead opens with it, its first two notes are the coin on the first frame, and all of it is the jingle under the end card. A fight gets the piece of the venue the page reports (`data-venue` on the stage), else one of the first three by its fighters' names. `THEME=final` (or any name) asks for one.
 - **Written to the fight.** The stage sends its sound cues while it is recorded (`fr:cue` events: bells, hits by weight, blocks, whiffs, the finisher, the ending). The intro plays under the VS card, each round is a section that starts on its bell and is fuller than the one before, the tempo of a section is bent so it ends on a bar, a fill and a crash mark each round break, a riser leads into the finisher, and the music stops on it. After a held silence a quiet section carries the result into the jingle. An app that sends no cues still gets bells and hits, read off the round number and the HP bars.
+- **Tone.** The arpeggio, the lead and the drums run through gentle low-passes (`TONE` in `src/score.mjs`) so the pulse voices do not fizz; the hits are not filtered.
 - **Effects.** The stage's own cues are rendered with the app's recipes (`components/fight/sfxPlayer.ts` in the insertcoin repo) and the music ducks under each hit.
-- **Loudness.** One static gain per track to −16 LUFS, held under −1.5 dB true peak. The log line `sound: <piece>, n sections, n cues, LUFS` says what was written.
+- **Loudness.** One static gain per track to −16 LUFS, held under −2 dB true peak on the WAV (the one AAC encode adds up to ~0.8 dB; the videos copy that track, they do not encode it again). The log line `sound: <piece>, n sections, n cues, LUFS` says what was written.
 
 ## Assets
 
