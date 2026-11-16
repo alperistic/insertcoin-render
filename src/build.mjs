@@ -1,23 +1,23 @@
 // Cuts the recorded frames into the two MP4s: 16:9 (1920x1080) and 9:16
 // (1080x1920 with the names above the stage and the domain below), both with
-// the demo music under them.
+// the fight's own sound under them (musicTrack, src/score.mjs).
 //
 // Sizes matter here: the files live in Supabase's free 1 GB bucket. The first
 // hand-made video used CRF 16 (16 MB for 25 s at 1080p); pixel art with flat
 // fields compresses far better than that number suggests, so these use CRF 24
 // with the animation tune, a few MB per format.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { frameSequence, maxGap, titleLayout } from "./frames.mjs";
 import { textItem, layerHtml } from "./stills.mjs";
+import { cuesFromTrack, pickTheme, planScore, renderScore } from "./score.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(HERE, "..", "assets");
 const FONT = path.join(ASSETS, "PressStart2P-Regular.ttf");
-const MUSIC = path.join(ASSETS, "music.m4a");
 
 /**
  * 60, not 30: a move's quick drawings stand one frame (17 ms) each, and a
@@ -106,15 +106,52 @@ export function prepareCut(recDir) {
   return { meta, picks, seq, seconds, start, last };
 }
 
-/** Music: cut to length, 1.5 s fade, quiet bed at about -28 LUFS (the old -14 drowned the fight). */
-export function musicTrack(recDir, seconds, name = "track.m4a") {
+/** Where the mix sits: loud enough for a feed, with the hits on top of the music. */
+const LOUDNESS = { lufs: -16, peak: -1.5 };
+
+/**
+ * The fight's sound (score.mjs): a score cut to this recording and every cue
+ * the stage fired, as one AAC track of `seconds`.
+ *
+ * It reads the recording's own meta.json: the cues the page sent (meta.cues,
+ * on the recorder's clock like the frames), or what the HP bars and the round
+ * imply when the app is one that does not send them. The theme is the one
+ * asked for (opts.theme, THEME=), else the stage's own (meta.venue), else the
+ * pairing's draw; the pairing also seeds the smaller choices.
+ *
+ * @param {string} recDir
+ * @param {number} seconds the video's length, end card included
+ * @param {string} [name]
+ * @param {{ theme?: string, seedKey?: string, log?: (m: string) => void }} [opts]
+ */
+export function musicTrack(recDir, seconds, name = "track.m4a", opts = {}) {
+  const meta = JSON.parse(fs.readFileSync(path.join(recDir, "meta.json"), "utf8"));
+  const start = meta.tVs;
+  // Where the held last frame ends: the cut's own length (prepareCut).
+  const fight = Math.min(seconds, meta.tEnd - 0.5 / FPS - start + HOLD_S);
+  const sent = Array.isArray(meta.cues) && meta.cues.length > 0;
+  const cues = (sent ? meta.cues : cuesFromTrack(meta.track, meta.tEnd)).map((c) => ({ ...c, t: c.t - start }));
+  const seedKey = opts.seedKey ?? (meta.hud ?? []).map((h) => h?.name ?? "").join("|");
+  const theme = pickTheme({ theme: opts.theme ?? process.env.THEME, venue: meta.venue, seedKey });
+  const plan = planScore({ cues, fight, total: seconds, theme, seedKey });
+  const { mix } = renderScore(plan);
+  const wav = path.join(recDir, name.replace(/\.[^.]+$/, ".wav"));
+  mix.writeWav(wav);
+
+  // One static gain to the target loudness, held under the true-peak ceiling:
+  // measured, not loudnorm's own riding, which pumps under every hit.
+  const probe = spawnSync("ffmpeg", ["-hide_banner", "-nostats", "-i", wav, "-af", "loudnorm=print_format=json", "-f", "null", "-"], { encoding: "utf8" });
+  const m = /\{[^{}]*"input_i"[^{}]*\}/.exec(probe.stderr ?? "");
+  const read = m ? JSON.parse(m[0]) : null;
+  const inI = Number(read?.input_i);
+  const inTp = Number(read?.input_tp);
+  const gain = Number.isFinite(inI) && Number.isFinite(inTp) ? Math.min(LOUDNESS.lufs - inI, LOUDNESS.peak - inTp) : 0;
   const track = path.join(recDir, name);
-  ffmpeg([
-    "-stream_loop", "-1", "-i", MUSIC,
-    "-t", seconds.toFixed(3),
-    "-af", `afade=t=out:st=${Math.max(0, seconds - 1.5).toFixed(3)}:d=1.5,loudnorm=I=-28:TP=-3:LRA=7,aresample=48000`,
-    "-c:a", "aac", "-b:a", "192k", track,
-  ]);
+  ffmpeg(["-i", wav, "-af", `volume=${gain.toFixed(2)}dB,aresample=48000`, "-c:a", "aac", "-b:a", "192k", track]);
+  (opts.log ?? console.log)(
+    `sound: ${theme}, ${plan.sections.length} sections, ${plan.cues.length} cues (${sent ? "from the stage" : "from HP and rounds"}), ` +
+      `${Number.isFinite(inI) ? (inI + gain).toFixed(1) : "?"} LUFS`,
+  );
   return track;
 }
 

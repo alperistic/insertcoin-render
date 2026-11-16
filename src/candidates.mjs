@@ -86,14 +86,14 @@ export async function composeCandidates({ matchId, title, workDir, cfg, rec, rec
     files.push(
       `B ${sizeMb(file)} MB (stage ${(b.share.stage * 100).toFixed(1)} %, ${(b.share.picture * 100).toFixed(1)} % under the HUD band, ` +
         `${b.into} frames under the band, ${b.wide} wider than the window, ${b.outside} with a fighter outside, ` +
-        `${b.wordCut} with a word cut, ${b.snaps} snaps)`,
+        `${b.wordCut} with a word cut, ${b.snaps} snaps, ${b.holds} framings, window moving on ${b.moving} of ${b.frames} frames)`,
     );
   }
   console.log(`${matchId}: ${out.seconds.toFixed(1)} s, max gap ${out.maxGapMs} ms; ${files.join("; ")}`);
   fs.writeFileSync(path.join(workDir, "candidates.json"), JSON.stringify({
     endcard: model, raw: rec.endcard,
     a: a && { share: a.share, crops: a.crops, k: a.k, flags: a.flags },
-    b: b && { share: b.share, bandH: b.bandH, into: b.into, wide: b.wide, outside: b.outside, wordCut: b.wordCut, snaps: b.snaps, cw: b.cw, ch: b.ch },
+    b: b && { share: b.share, bandH: b.bandH, into: b.into, wide: b.wide, outside: b.outside, wordCut: b.wordCut, snaps: b.snaps, moving: b.moving, frames: b.frames, holds: b.holds, cw: b.cw, ch: b.ch },
   }, null, 1));
   return out;
 }

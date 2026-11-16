@@ -7,9 +7,9 @@ This repo is public so the GitHub Actions minutes are free. It holds no app code
 The page plays in slow motion while it is recorded (`src/slowclock.js`, a quarter of the speed by default, env `SLOW`): a runner has no GPU and paints the stage at only ~18–27 frames a second, which lost every drawing that stands for one or two frames. The timestamps are squeezed back afterwards, so both files run at normal speed, at 60 fps:
 
 - `16x9.mp4`, 1920×1080, the stage as the page draws it
-- `9x16.mp4`, 1080×1920, a full-height 4:3 window of the stage that follows both fighters (candidate B below), with the names above it, our own HUD over its top band and insertcoin.lol below
+- `9x16.mp4`, 1080×1920, a square window of the stage at its full height (candidate B below), with the names above it, our own HUD over its top band and insertcoin.lol below
 
-Both end on a 2.5 s score end card. The demo music plays under both.
+Both end on a 2.5 s score end card. Each fight gets its own soundtrack, written for its cut (see Sound).
 
 ## How a fight gets rendered
 
@@ -96,7 +96,7 @@ Since 22.10.2026 the default is B plus the end card. The old cut and candidate A
 
 `PORTRAIT=legacy ENDCARD=0` cuts both files exactly as before 22.10.
 
-- **B · vertical composition** (default, `src/portrait.mjs`): from the 16:9 recording, a full-height 4:3 window of the stage that follows both fighters (their drawn bounds, weapons and effects included, sampled on every page frame). Stage words (K.O., WINS, ROUND, FIGHT) are framed only when they fit together with both fighters; a fighter is never cut for a word. Its own HUD is drawn opaque over the window's top band, covering the stage's cropped HUD, laid out like the live one: the job's names (challenger left), the page's W–L records, HP bars in each fighter's brand colour as read off the page, the round on a framed plate. The log counts the frames where a fighter reaches under the band. `src/candidates.mjs` composes the cut from the recording, so a cut can be redone without recording again.
+- **B · vertical composition** (default, `src/portrait.mjs`): from the 16:9 recording, a square window as tall as the stage (1080×1080 in the frame; until 16.11.2026 a 4:3 window, 1080×810, with the fighters a quarter smaller). The window does not follow the fighters: it is planned over the whole fight as a few fixed framings with pans between them (`trackCrop` with `hold`, `src/layout.mjs`), from their drawn bounds, weapons and effects included, sampled on every page frame. The cut opens wider, on the 4:3 the VS card needs, pushes in when the card goes, and pulls back to the whole stage for the result, whose banner fits no closer window. Stage words (K.O., WINS, ROUND, FIGHT) are framed only when they fit together with both fighters; a fighter is never cut for a word. Between push-in and pull-out its own HUD is drawn opaque over the window's top band, covering the stage's cropped HUD, laid out like the live one: the job's names (challenger left), the page's W–L records, HP bars in each fighter's brand colour as read off the page, the round on a framed plate; wide, the picture shows the stage's own HUD. The log counts the framings, the frames the window moves on, and the frames where a fighter reaches under the band. `src/candidates.mjs` composes the cut from the recording, so a cut can be redone without recording again.
 - **A · compact live stage**: a second recording at a phone viewport (432×608 CSS px at device scale 2.5, so 1080 px wide), where the page lays out a 4:3 stage with its mobile HUD above and the commentary below. The buttons between HUD and stage are cut out. Takes a second slow-motion pass, about as long as the first.
 - **End card**: the winner, both sealed totals, the tier and what decided it (both values under their columns, the winner's green), read off the page's own end card and shown as the page writes them; 2.5 s after a 0.3 s fade from the last frame. If the page's card does not read, the files go without one.
 
@@ -108,7 +108,15 @@ TITLE_A=ATEL TITLE_B=TTRRECHNER node render.mjs --match <match-id> --candidates
 
 This writes `16x9.mp4`, `9x16-a.mp4` and `9x16-b.mp4` with the end card, the letterbox `9x16.mp4` without one (it stays the old cut, for comparison), plus `candidates.json` with the measured layout. Without `drawtext` locally (Homebrew's ffmpeg), the letterbox's text is drawn the same PNG way.
 
+## Sound
+
+There is no music file. `src/score.mjs` writes a track for each cut and `src/synth.mjs` renders it offline (two pulse voices, a triangle bass, noise drums; no dependencies, seeded, so the same fight gets the same track).
+
+- **One sound, four pieces.** `garage`, `rooftop`, `orbit` and `final` differ in key, tempo, bass and drums, and share one eight-note motif: every lead opens with it, its first two notes are the coin on the first frame, and all of it is the jingle under the end card. A fight gets the piece of the venue the page reports (`data-venue` on the stage), else one of the first three by its fighters' names. `THEME=final` (or any name) asks for one.
+- **Written to the fight.** The stage sends its sound cues while it is recorded (`fr:cue` events: bells, hits by weight, blocks, whiffs, the finisher, the ending). The intro plays under the VS card, each round is a section that starts on its bell and is fuller than the one before, the tempo of a section is bent so it ends on a bar, a fill and a crash mark each round break, a riser leads into the finisher, and the music stops on it. After a held silence a quiet section carries the result into the jingle. An app that sends no cues still gets bells and hits, read off the round number and the HP bars.
+- **Effects.** The stage's own cues are rendered with the app's recipes (`components/fight/sfxPlayer.ts` in the insertcoin repo) and the music ducks under each hit.
+- **Loudness.** One static gain per track to −16 LUFS, held under −1.5 dB true peak. The log line `sound: <piece>, n sections, n cues, LUFS` says what was written.
+
 ## Assets
 
 - `assets/PressStart2P-Regular.ttf`: Press Start 2P, SIL Open Font License, see `assets/OFL-PressStart2P.txt`
-- `assets/music.m4a`: the insertcoin demo track, generated by `video/scripts/music.py` in the insertcoin repo
