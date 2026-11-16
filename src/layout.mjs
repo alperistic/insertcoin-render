@@ -179,12 +179,6 @@ export function trackCrop(track, { stageW, winW, margin, maxSpeed, fps, times, o
 }
 
 /**
- * Candidate B's opening: the cut starts on the VS card in the wide window
- * (the card is drawn for the whole stage) and pushes in to the close one when
- * the fight starts. 0 = wide, 1 = close, per output frame; a smoothstep of
- * `seconds` that starts `lead` before `tOpen`. No `tOpen`: close throughout.
- */
-/**
  * The camera as somebody would operate it who has seen the fight: a few fixed
  * framings, each held for as long as it shows everything, and a pan from one
  * to the next that starts before the fighters leave the frame.
@@ -244,6 +238,12 @@ function holdPath({ lo, hi, centre, fps, hold, step }) {
   return { x, snaps, holds: runsOf.length };
 }
 
+/**
+ * Candidate B's opening: the cut starts on the VS card in the wide window
+ * (the card is drawn for the whole stage) and pushes in to the close one when
+ * the fight starts. 0 = wide, 1 = close, per output frame; a smoothstep of
+ * `seconds` that starts `lead` before `tOpen`. No `tOpen`: close throughout.
+ */
 export function openingEase(times, tOpen, { seconds = 0.7, lead = 0.2 } = {}) {
   if (tOpen === null || tOpen === undefined) return times.map(() => 1);
   return times.map((t) => {

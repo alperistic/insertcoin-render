@@ -267,6 +267,16 @@ export function planB(meta, cut, title, dir, log = console.log) {
   const sh = 1080;
   const bandH = Math.max(HUD_BASE.minH, even((hudBottom / innerH) * sh));
   const HUD = hudFor(bandH);
+  // While the window is still wider than the square (the push-in, and the
+  // first frames of the pull-out), the stage sits lower in it, letterboxed,
+  // and its HUD rows reach below our band: the band is drawn that much
+  // deeper on those frames, so no corner of the stage's own bars shows.
+  const below = wins.map(({ w, y }, k) => {
+    if (!hud || k < open || k >= close) return 0;
+    const reach = Math.ceil(((padY + hudBottom * d - y) * sh) / w);
+    return Math.max(0, reach - bandH);
+  });
+  const deeper = runs(below).filter((r) => r.v > 0);
 
   const tH = titleHeight(title);
   const [titleY, stageY, domainY] = stackLayout([tH, sh, DOMAIN_SIZE], [GAP_TITLE, GAP_DOMAIN]);
@@ -337,29 +347,52 @@ export function planB(meta, cut, title, dir, log = console.log) {
     if (wins[k].x !== wins[k - 1].x) moving++;
   }
   return {
-    cw, ch, iw, ih, ox, oy, padH, padY, wins, open, close, sh, stageY, hudY, barY, domainY, bandH, into, outside, fill, HUD,
+    cw, ch, iw, ih, ox, oy, padH, padY, wins, open, close, sh, stageY, hudY, barY, domainY, bandH, deeper, into, outside, fill, HUD,
     wide: crop.wide, snaps: crop.snaps, wordCut: crop.wordCut, moving, frames: closeFrames, holds: crop.holds,
     chrome, hudPng, stills, hpA, hpB, rounds, roundFiles,
     share: { stage: sh / 1920, picture: (sh - bandH) / 1920 },
   };
 }
 
-export function encodeB(plan, cut, track, out, dir, endcardPng = null) {
-  // The window per frame through sendcmd: a command takes effect on the
-  // first frame at or after its time, so each goes half a frame early. Size
-  // before place when it shrinks, place before size when it grows, so the
-  // window never asks for rows the padded stage does not have.
-  const cmds = [];
-  plan.wins.forEach((w, k) => {
-    const p = plan.wins[k - 1];
-    if (k > 0 && w.w === p.w && w.x === p.x && w.y === p.y) return;
-    const size = [`crop@win w ${w.w}`, `crop@win h ${w.w}`];
-    const place = [`crop@win x ${w.x}`, `crop@win y ${w.y}`];
-    const list = k > 0 && w.w === p.w ? place : !p || w.w <= p.w ? [...size, ...place] : [...place, ...size];
-    cmds.push(`${(k === 0 ? 0 : (k - 0.5) / FPS).toFixed(6)} ${list.join(", ")};`);
+/**
+ * The window as ffmpeg commands, one line per frame it changes on. The padded
+ * stage (iw x padH) is scaled so the window comes out `side` px square, and a
+ * crop of fixed size takes it out: the zoom is a change of the scale, the
+ * crop only moves. A crop that changes its own size through sendcmd works on
+ * ffmpeg 7 and up, but hangs Ubuntu 24.04's 6.1, which the runners use
+ * (16.11.2026). A command takes effect on the first frame at or after its
+ * time, so each goes half a frame early.
+ *
+ * @param {{ wins: { w: number, x: number, y: number }[], iw: number, padH: number }} plan
+ * @returns {{ first: { zw: number, zh: number, x: number, y: number }, lines: string[] }}
+ */
+export function windowCommands(plan, side, fps = FPS) {
+  const at = ({ w, x, y }) => {
+    const zw = even((plan.iw * side) / w);
+    const zh = even((plan.padH * side) / w);
+    return {
+      zw, zh,
+      x: Math.min(zw - side, Math.max(0, Math.round((x * zw) / plan.iw))),
+      y: Math.min(zh - side, Math.max(0, Math.round((y * zh) / plan.padH))),
+    };
+  };
+  const z = plan.wins.map(at);
+  const lines = [];
+  z.forEach((c, k) => {
+    const p = z[k - 1];
+    if (p && c.zw === p.zw && c.zh === p.zh && c.x === p.x && c.y === p.y) return;
+    const list = [];
+    if (!p || c.zw !== p.zw || c.zh !== p.zh) list.push(`scale@zoom w ${c.zw}`, `scale@zoom h ${c.zh}`);
+    list.push(`crop@win x ${c.x}`, `crop@win y ${c.y}`);
+    lines.push(`${(k === 0 ? 0 : (k - 0.5) / fps).toFixed(6)} ${list.join(", ")};`);
   });
+  return { first: z[0], lines };
+}
+
+export function encodeB(plan, cut, track, out, dir, endcardPng = null) {
+  const zoom = windowCommands(plan, plan.sh);
   const cmdFile = path.join(dir, "crop-b.cmd");
-  fs.writeFileSync(cmdFile, cmds.join("\n") + "\n");
+  fs.writeFileSync(cmdFile, zoom.lines.join("\n") + "\n");
 
   const HUD = plan.HUD;
   const roundList = [...plan.roundFiles.keys()];
@@ -371,17 +404,21 @@ export function encodeB(plan, cut, track, out, dir, endcardPng = null) {
   const hudEnd = plan.close - 1;
   const on = (r) => `between(n,${Math.max(r.from, plan.open)},${Math.min(r.to, hudEnd)})`;
   const live = (r) => r.to >= plan.open && r.from <= hudEnd;
+  const band = C.surface.replace("#", "0x");
+  for (const r of plan.deeper ?? []) fills.push(`drawbox=x=0:y=${plan.hudY + plan.bandH}:w=1080:h=${r.v}:color=${band}:t=fill:enable='${on(r)}'`);
   for (const r of plan.hpA) if (r.v > 0 && live(r)) fills.push(`drawbox=x=${L}:y=${plan.barY}:w=${r.v}:h=${HUD.barH}:color=${fa}:t=fill:enable='${on(r)}'`);
   for (const r of plan.hpB) if (r.v > 0 && live(r)) fills.push(`drawbox=x=${R - r.v}:y=${plan.barY}:w=${r.v}:h=${HUD.barH}:color=${fb}:t=fill:enable='${on(r)}'`);
-  const w0 = plan.wins[0];
+  const z0 = zoom.first;
   // Pixel art one and a third times its size: tripled on whole pixels first,
   // then averaged down, so an edge stays an edge instead of a lanczos ring.
   let graph =
     `[0:v]format=rgb24,crop=${plan.iw}:${plan.ih}:${plan.ox}:${plan.oy},pad=${plan.iw}:${plan.padH}:0:${plan.padY}:color=${BG},` +
-    `sendcmd=f='${cmdFile.replace(/'/g, "'\\''")}',crop@win=w=${w0.w}:h=${w0.w}:x=${w0.x}:y=${w0.y},` +
-    `scale=iw*3:ih*3:flags=neighbor,scale=1080:${plan.sh}:flags=area,setsar=1,pad=1080:1920:0:${plan.stageY}:color=${BG}[base];` +
+    `scale=iw*3:ih*3:flags=neighbor,sendcmd=f='${cmdFile.replace(/'/g, "'\\''")}',scale@zoom=w=${z0.zw}:h=${z0.zh}:flags=area,` +
+    `crop@win=w=${plan.sh}:h=${plan.sh}:x=${z0.x}:y=${z0.y},setsar=1,pad=1080:1920:0:${plan.stageY}:color=${BG}[base];` +
     `[base][2:v]overlay=0:0[ch];[ch][3:v]overlay=0:0:enable='between(n,${plan.open},${plan.close - 1})'` +
-    (fills.length ? `,${fills.join(",")}` : "") + "[h0]";
+    // The boxes are drawn on RGB: on the overlay's YUV they came out in the
+    // wrong range (a fill washed out, the band's #0a0a0d a visible grey).
+    (fills.length ? `,format=rgb24,${fills.join(",")}` : "") + "[h0]";
   let last = "h0";
   roundList.forEach((v, i) => {
     const when = plan.rounds.filter((r) => r.v === v && live(r)).map(on).join("+") || "0";
