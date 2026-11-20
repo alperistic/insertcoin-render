@@ -102,6 +102,19 @@ export async function recordFight(pageUrl, outDir, opts = {}) {
       await page.waitForTimeout(800);
     }
 
+    // Nothing but the stage's own block may show in the cut. The phone cut (A)
+    // takes the commentary at its tallest, and where the commentary is
+    // shorter the page under it showed through: the result line of the page
+    // ("ZED WINS · 1720–2235 · KO") stood under the VS card for three
+    // seconds, with the dev server's badge beside it (found 20.11.2026).
+    // Hidden, not removed: the layout, and so every measured rect, stays.
+    await page.addStyleTag({ content: "nextjs-portal,[data-rec-hide]{visibility:hidden!important}" });
+    await page.evaluate(() => {
+      for (let el = document.querySelector(".fr-root"); el && el !== document.body; el = el.parentElement) {
+        for (let s = el.nextElementSibling; s; s = s.nextElementSibling) s.setAttribute("data-rec-hide", "");
+      }
+    });
+
     // The two instants the cut is made from, stamped by the page itself on
     // the browser's clock (the same clock the screencast timestamps use):
     // the VS card standing complete, and the stage handing over to the end card.
