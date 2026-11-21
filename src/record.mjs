@@ -47,6 +47,21 @@ export const PHONE = {
 };
 
 /**
+ * The page pass (PORTRAIT=page): a page that lays itself out as a 9:16 frame
+ * (insertcoin's dev route /preview/exhibition/<slug>?layout=916, TallFrame.tsx
+ * there: rig, stage with its scoreboard, the jury's desk). The frame is
+ * 432x768 CSS px, so at device scale 2.5 the viewport is the video, 1080x1920,
+ * and nothing is cut out, stacked or drawn over afterwards. Measured: the
+ * frame itself (a page without one must fail, not be filmed as it is) and the
+ * plate that carries the site's name, where the end card puts its own.
+ */
+export const TALL = {
+  viewport: { width: 432, height: 768 },
+  dpr: 2.5,
+  measure: { frame: "[data-tall-frame]", mark: "[data-tall-mark]" },
+};
+
+/**
  * @param {string} pageUrl the public match page
  * @param {string} outDir frames land in outDir/f, metadata in outDir/meta.json
  * @param {{ viewport?: {width:number,height:number}, dpr?: number, measure?: Record<string,string>,

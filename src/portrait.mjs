@@ -23,6 +23,13 @@
 //       frames; what does not is the VS card (hence the opening) and a few
 //       frames where they stand at their marks.
 //
+//   page · the page's own 9:16 (PORTRAIT=page): no candidate of ours at all.
+//       A page that lays itself out as a 1080x1920 frame is recorded as it
+//       stands (record.mjs TALL) and only gets the end card and the sound.
+//       A and B both leave the stage a block in a black frame (42 % and 56 %
+//       of its height) because the 16:9 stage has no more picture to give; a
+//       page built for the format fills the rest with its own set.
+//
 // Each is planned first (geometry, the PNG pages stills.mjs renders), then
 // encoded once the PNGs exist.
 
@@ -430,6 +437,53 @@ export function encodeB(plan, cut, track, out, dir, endcardPng = null) {
   ffmpeg([
     "-framerate", String(FPS), "-i", path.join(cut.seq, "%05d.jpg"), "-i", track, "-i", plan.chrome, "-i", plan.hudPng,
     ...roundList.flatMap((v) => ["-i", plan.roundFiles.get(v)]),
+    ...(endcardPng ? endcardInput(endcardPng) : []),
+    "-filter_complex", graph, "-map", "[v]", "-map", "1:a", ...ENCODE, out,
+  ]);
+}
+
+// ── page · the page's own 9:16 frame ──────────────────────────────────────
+
+/** The query that asks a page for its 9:16 frame; every other part of the URL stays. */
+export function tallUrl(url) {
+  const u = new URL(url);
+  u.searchParams.set("layout", "916");
+  return u.href;
+}
+
+/**
+ * @param {object} meta the page pass's meta.json (record.mjs TALL)
+ * @returns {{ crop: {x:number,y:number,w:number,h:number}, k: number, flags: string, domainY: number, share: { stage: number } }}
+ */
+export function planPage(meta) {
+  const frame = meta.rects?.frame;
+  // Never film a page that did not answer with the frame: the live match page
+  // ignores ?layout=916, and its phone layout in a 9:16 viewport would pass
+  // for a video while half of it is the site's header.
+  if (!frame) throw new Error("page pass: no 9:16 frame on the page ([data-tall-frame]); PORTRAIT=page needs a page that mounts one (insertcoin's /preview/exhibition/<slug>)");
+  const d = meta.dpr;
+  // Offsets may be 0 (they are, in TALL's viewport), which even() would lift to 2.
+  const off = (v) => Math.round((v * d) / 2) * 2;
+  const crop = { x: off(frame.x), y: off(frame.y), w: even(frame.w * d), h: even(frame.h * d) };
+  if (Math.abs(crop.w * 16 - crop.h * 9) > 16) throw new Error(`page pass: the frame is ${frame.w}x${frame.h} CSS px, not 9:16`);
+  // 1080 device px already (TALL), so no scaling; anything else is scaled.
+  const k = 1080 / crop.w;
+  const flags = Math.abs(k - Math.round(k)) < 0.01 ? "neighbor" : "lanczos";
+  // The end card fades in over the last frame: its domain line stands where
+  // the frame's own name plate was, so the name does not jump.
+  const mark = meta.rects?.mark;
+  const domainY = mark ? Math.round((mark.y - frame.y + mark.h / 2) * d * k - DOMAIN_SIZE / 2) : 1920 - 160;
+  return { crop, k, flags, domainY, share: { stage: (meta.box.h * d * k) / 1920 } };
+}
+
+/** @param {{ seq: string, seconds: number }} cut prepareCut of the page pass */
+export function encodePage(plan, cut, track, out, endcardPng = null) {
+  const q = plan.crop;
+  const scale = Math.abs(plan.k - 1) < 1e-9 ? "" : `,scale=1080:1920:flags=${plan.flags}`;
+  const base = `[0:v]format=rgb24,crop=${q.w}:${q.h}:${q.x}:${q.y}${scale},setsar=1`;
+  const graph = endcardPng ? `${base},${TAIL}[st];${endcardGraph("st", 2, cut.seconds, 1080, 1920)}` : `${base},${TAIL}[v]`;
+  ffmpeg([
+    "-framerate", String(FPS), "-i", path.join(cut.seq, "%05d.jpg"), "-i", track,
     ...(endcardPng ? endcardInput(endcardPng) : []),
     "-filter_complex", graph, "-map", "[v]", "-map", "1:a", ...ENCODE, out,
   ]);

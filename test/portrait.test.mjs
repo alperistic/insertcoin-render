@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { windowCommands } from "../src/portrait.mjs";
+import { planPage, tallUrl, windowCommands } from "../src/portrait.mjs";
 
 // A 1432 x 800 stage padded to 1432 square: wide 4:3 at the start, a push-in,
 // a held square, a move, then the pull-out to the whole stage.
@@ -35,4 +35,42 @@ test("windowCommands: the zoom is the scale, the crop only moves and never leave
   }
   // Never a size on the crop: ffmpeg 6.1 hangs on that.
   assert.ok(lines.every((l) => !/crop@win [wh] /.test(l)));
+});
+
+test("tallUrl: asks for the 9:16 frame and keeps the rest of the URL", () => {
+  assert.equal(tallUrl("http://localhost:3000/preview/exhibition/a-vs-b?stage=on"), "http://localhost:3000/preview/exhibition/a-vs-b?stage=on&layout=916");
+  assert.equal(tallUrl("http://localhost:3000/preview/exhibition/a-vs-b?stage=on&venue=pitch&layout=x"), "http://localhost:3000/preview/exhibition/a-vs-b?stage=on&venue=pitch&layout=916");
+});
+
+// What record.mjs TALL measures on insertcoin's 9:16 frame: 432x768 CSS px at
+// the viewport's origin, the stage 84 px down, the name plate in the desk's front.
+const tall = {
+  dpr: 2.5,
+  box: { x: 0, y: 84, w: 432, h: 324 },
+  rects: { frame: { x: 0, y: 0, w: 432, h: 768 }, mark: { x: 85, y: 676, w: 262, h: 42 } },
+};
+
+test("planPage: the frame is the video, uncropped and unscaled", () => {
+  const plan = planPage(tall);
+  assert.deepEqual(plan.crop, { x: 0, y: 0, w: 1080, h: 1920 });
+  assert.equal(plan.k, 1);
+  assert.equal(plan.flags, "neighbor");
+  // The stage is the same 4:3 window A shows; what changed is everything around it.
+  assert.equal(plan.share.stage.toFixed(3), "0.422");
+  // The end card's domain line on the centre of the name plate: (676 + 21) * 2.5 - 16.
+  assert.equal(plan.domainY, 1727);
+});
+
+test("planPage: a frame in a wider window is cut out where it stands and scaled to 1080 wide", () => {
+  const plan = planPage({ ...tall, dpr: 2, rects: { frame: { x: 104, y: 16, w: 432, h: 768 }, mark: null } });
+  assert.deepEqual(plan.crop, { x: 208, y: 32, w: 864, h: 1536 });
+  assert.equal(plan.k, 1.25);
+  assert.equal(plan.flags, "lanczos");
+  assert.equal(plan.domainY, 1760);
+});
+
+test("planPage: a page without the frame is refused, never filmed as it is", () => {
+  assert.throws(() => planPage({ dpr: 2.5, box: tall.box, rects: { frame: null, mark: null } }), /no 9:16 frame/);
+  assert.throws(() => planPage({ dpr: 2.5, box: tall.box }), /no 9:16 frame/);
+  assert.throws(() => planPage({ ...tall, rects: { frame: { x: 0, y: 0, w: 432, h: 608 } } }), /not 9:16/);
 });
