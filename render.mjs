@@ -23,8 +23,11 @@
 // over it) with the end card. One recording pass; B and the end card are
 // PNG stills drawn by Chromium (src/stills.mjs), so no drawtext needed.
 //
-//   PORTRAIT=b|legacy|a|both  which 9:16 (src/portrait.mjs); legacy is the old
-//                             letterbox, a needs a second (phone) pass, both is local only
+//   PORTRAIT=b|legacy|a|both|page
+//                             which 9:16 (src/portrait.mjs); legacy is the old
+//                             letterbox, a needs a second (phone) pass, both is local
+//                             only; page records the page's own 9:16 frame in a second
+//                             pass (?layout=916, local only: the match page has none)
 //   ENDCARD=0                 no end card on either file
 //   ENDCARD_NOTE=0            leave the end card's line about the scorecards out
 //   ENDCARD_LINE=<text>       one more line on the end card under everything else
@@ -41,7 +44,8 @@ import path from "node:path";
 import { buildVideos } from "./src/build.mjs";
 import { batchSummary, parseBatch } from "./src/batch.mjs";
 import { composeCandidates } from "./src/candidates.mjs";
-import { NoStageError, PHONE, recordFight } from "./src/record.mjs";
+import { tallUrl } from "./src/portrait.mjs";
+import { NoStageError, PHONE, TALL, recordFight } from "./src/record.mjs";
 import { buildSocial } from "./src/social.mjs";
 import { resolveTitle } from "./src/titles.mjs";
 
@@ -76,13 +80,13 @@ function sizeMb(file) {
 
 /**
  * What to cut. Unset env: 16x9 and B's 9x16, both with the end card.
- * @returns {{ portrait: "legacy"|"a"|"b"|"both", endcard: boolean, note: boolean, line?: string, legacy: boolean }}
+ * @returns {{ portrait: "legacy"|"a"|"b"|"both"|"page", endcard: boolean, note: boolean, line?: string, legacy: boolean }}
  */
 function options({ candidates = false } = {}) {
   const line = process.env.ENDCARD_LINE?.trim() || undefined;
   if (candidates) return { portrait: "both", endcard: true, note: process.env.ENDCARD_NOTE !== "0", line, legacy: true };
   const portrait = (process.env.PORTRAIT || "b").toLowerCase();
-  if (!["legacy", "a", "b", "both"].includes(portrait)) throw new Error(`PORTRAIT=${portrait}: b, legacy, a or both`);
+  if (!["legacy", "a", "b", "both", "page"].includes(portrait)) throw new Error(`PORTRAIT=${portrait}: b, legacy, a, both or page`);
   return { portrait, endcard: process.env.ENDCARD !== "0", note: process.env.ENDCARD_NOTE !== "0", line, legacy: portrait === "legacy" };
 }
 
@@ -101,7 +105,7 @@ async function renderOne(matchId, title, workDir, cfg = options(), url = `${APP}
   return renderCandidates(matchId, title, workDir, cfg, url);
 }
 
-/** The default path: B and/or A and/or the end card, composed from the recording(s). */
+/** The default path: B and/or A, or the page's own 9:16, and/or the end card, composed from the recording(s). */
 async function renderCandidates(matchId, title, workDir, cfg, url) {
   const wantA = cfg.portrait === "a" || cfg.portrait === "both";
   const wantB = cfg.portrait === "b" || cfg.portrait === "both";
@@ -117,8 +121,18 @@ async function renderCandidates(matchId, title, workDir, cfg, url) {
     console.log(`${matchId}: phone pass (A) ${((Date.now() - t) / 1000).toFixed(0)} s, ${recA.frames.length} frames`);
   }
 
+  // The page's own 9:16: the same fight once more on the URL that asks for
+  // the frame. The 16:9 pass above stays on the plain page; it gives 16x9.mp4
+  // and the end card's text.
+  let recPage = null;
+  if (cfg.portrait === "page") {
+    t = Date.now();
+    recPage = await recordFight(tallUrl(url), path.join(workDir, "rec-page"), TALL);
+    console.log(`${matchId}: page pass (9:16 frame) ${((Date.now() - t) / 1000).toFixed(0)} s, ${recPage.frames.length} frames`);
+  }
+
   title = pickTitle(matchId, title, rec);
-  return composeCandidates({ matchId, title, workDir, cfg, rec, recA });
+  return composeCandidates({ matchId, title, workDir, cfg, rec, recA, recPage });
 }
 
 const SOCIAL = process.argv.includes("--social");
@@ -190,6 +204,7 @@ async function claimLoop() {
   if (SECRET.length < 16) throw new Error("VIDEO_RENDER_SECRET is not set");
   const cfg = options();
   if (cfg.portrait === "both") throw new Error("PORTRAIT=both is for local comparison only (--match)");
+  if (cfg.portrait === "page") throw new Error("PORTRAIT=page is for --page only: the match page has no 9:16 frame");
   for (let i = 0; i < MAX_JOBS; i++) {
     const { job } = await api("claim");
     if (!job) {

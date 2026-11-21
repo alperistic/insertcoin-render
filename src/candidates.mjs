@@ -1,4 +1,4 @@
-// The 9:16 cuts (B by default, A, both) and the end card, cut from
+// The 9:16 cuts (B by default, A, both, the page's own) and the end card, cut from
 // recordings already made: render.mjs records, this composes. Apart so a cut can be
 // redone from out/<id>/rec without recording the fight again.
 
@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENDCARD_S, LEGACY_DOMAIN_Y, buildVideos, hasDrawtext, legacyChromeStill, musicTrack, prepareCut } from "./build.mjs";
 import { endCardModel } from "./layout.mjs";
-import { encodeA, encodeB, endcardStill, planA, planB } from "./portrait.mjs";
+import { encodeA, encodeB, encodePage, endcardStill, planA, planB, planPage } from "./portrait.mjs";
 import { renderStills } from "./stills.mjs";
 
 const sizeMb = (file) => (fs.statSync(file).size / 1e6).toFixed(1);
@@ -14,9 +14,10 @@ const sizeMb = (file) => (fs.statSync(file).size / 1e6).toFixed(1);
 /**
  * @param {{ matchId: string, title: { a: string, b: string }, workDir: string,
  *   cfg: { portrait: string, endcard: boolean, note: boolean, line?: string, legacy: boolean, candidates?: boolean },
- *   rec: object, recA: object | null }} o rec/recA: meta of rec/ and rec-a/ in workDir
+ *   rec: object, recA: object | null, recPage?: object | null }} o
+ *   rec/recA/recPage: meta of rec/, rec-a/ and rec-page/ in workDir
  */
-export async function composeCandidates({ matchId, title, workDir, cfg, rec, recA }) {
+export async function composeCandidates({ matchId, title, workDir, cfg, rec, recA, recPage = null }) {
   const wantA = cfg.portrait === "a" || cfg.portrait === "both";
   const wantB = cfg.portrait === "b" || cfg.portrait === "both";
   const recDir = path.join(workDir, "rec");
@@ -33,6 +34,9 @@ export async function composeCandidates({ matchId, title, workDir, cfg, rec, rec
   let b = null;
   let cutA = null;
   let cutB = null;
+  // The page's own 9:16 (PORTRAIT=page): nothing to draw, only where to cut.
+  const pg = recPage ? planPage(recPage) : null;
+  const cutPage = pg ? prepareCut(path.join(workDir, "rec-page")) : null;
   if (wantA) {
     cutA = prepareCut(path.join(workDir, "rec-a"));
     a = planA(recA, title, stillDir);
@@ -54,6 +58,10 @@ export async function composeCandidates({ matchId, title, workDir, cfg, rec, rec
     if (b) {
       ec.b = path.join(stillDir, "endcard-9x16-b.png");
       stills.push(endcardStill(model, ec.b, { portrait: true, domainY: b.domainY, note: cfg.note, line: cfg.line }));
+    }
+    if (pg) {
+      ec.page = path.join(stillDir, "endcard-9x16-page.png");
+      stills.push(endcardStill(model, ec.page, { portrait: true, domainY: pg.domainY, note: cfg.note, line: cfg.line }));
     }
     if (cfg.legacy && !cfg.candidates) {
       ec.portrait = path.join(stillDir, "endcard-9x16.png");
@@ -89,10 +97,18 @@ export async function composeCandidates({ matchId, title, workDir, cfg, rec, rec
         `${b.wordCut} with a word cut, ${b.snaps} snaps, ${b.holds} framings, window moving on ${b.moving} of ${b.frames} frames)`,
     );
   }
+  if (pg) {
+    const file = path.join(workDir, "9x16.mp4");
+    const secs = cutPage.seconds + (ec.page ? ENDCARD_S : 0);
+    encodePage(pg, cutPage, musicTrack(path.join(workDir, "rec-page"), secs, "track-out.m4a"), file, ec.page ?? null);
+    out.portrait = file;
+    files.push(`page ${sizeMb(file)} MB (stage ${(pg.share.stage * 100).toFixed(1)} %, the page's own frame across all of it)`);
+  }
   console.log(`${matchId}: ${out.seconds.toFixed(1)} s, max gap ${out.maxGapMs} ms; ${files.join("; ")}`);
   fs.writeFileSync(path.join(workDir, "candidates.json"), JSON.stringify({
     endcard: model, raw: rec.endcard,
     a: a && { share: a.share, crops: a.crops, k: a.k, flags: a.flags },
+    page: pg && { share: pg.share, crop: pg.crop, k: pg.k, flags: pg.flags, domainY: pg.domainY },
     b: b && { share: b.share, bandH: b.bandH, into: b.into, wide: b.wide, outside: b.outside, wordCut: b.wordCut, snaps: b.snaps, moving: b.moving, frames: b.frames, holds: b.holds, cw: b.cw, ch: b.ch },
   }, null, 1));
   return out;
