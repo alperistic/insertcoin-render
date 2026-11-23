@@ -67,6 +67,15 @@ Adds `out/<id>/social/`, local only, nothing posted:
 
 A clip that fits is copied byte for byte. One that is too long keeps its end (the K.O. and the end card) and is re-encoded; one that would be too big is re-encoded at a bitrate under the cap. The caption file holds facts only, no post: the words are written by a person.
 
+### Short cut (`src/highlights.mjs`)
+
+```sh
+node src/highlights.mjs out/<slug>          # → out/<slug>/9x16-short.mp4, about 11 s
+node src/highlights.mjs out/<slug> --plan   # print the segments, cut nothing
+```
+
+Cuts a finished `9x16.mp4` down to three hits, the finisher with its K.O., 1.2 s of the WINS banner and 2 s of the end card, from the cues in `rec-page/meta.json` (else `rec/meta.json`), with no second recording. The big hits come first; a fight with fewer than three gets its longest runs of light hits. The sound is the full cut's track, cut along with the picture. `--hook=<png>:<y>` lays a 1080 px wide PNG over the first segment (a line that says what the clip is, for cuts whose frame does not say it itself).
+
 ### Several fights (`--batch`)
 
 ```sh
