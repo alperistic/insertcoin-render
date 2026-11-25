@@ -5,12 +5,12 @@ import { batchSummary, parseBatch } from "../src/batch.mjs";
 test("parseBatch: ids, URLs, titles, comments and blank lines", () => {
   const jobs = parseBatch(`# bracket week 1
 
-7fb30586-bf0a-401b-9cfb-90ce8749ee11 | CORDINARE | ATEL
+11111111-2222-4333-8444-555555555555 | NORTHWIND | ACME
 http://localhost:3000/preview/exhibition/cursor-devin?stage=on | CURSOR | DEVIN
 87c5d467-459b-49c7-b4b5-6ea725ada047
 `);
   assert.deepEqual(jobs, [
-    { line: 3, matchId: "7fb30586-bf0a-401b-9cfb-90ce8749ee11", slug: "7fb30586-bf0a-401b-9cfb-90ce8749ee11", title: { a: "CORDINARE", b: "ATEL" } },
+    { line: 3, matchId: "11111111-2222-4333-8444-555555555555", slug: "11111111-2222-4333-8444-555555555555", title: { a: "NORTHWIND", b: "ACME" } },
     { line: 4, url: "http://localhost:3000/preview/exhibition/cursor-devin?stage=on", slug: "cursor-devin", title: { a: "CURSOR", b: "DEVIN" } },
     { line: 5, matchId: "87c5d467-459b-49c7-b4b5-6ea725ada047", slug: "87c5d467-459b-49c7-b4b5-6ea725ada047" },
   ]);

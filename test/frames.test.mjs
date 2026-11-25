@@ -29,12 +29,12 @@ test("maxGap measures only inside the window", () => {
 });
 
 test("a short title stays on one line at the largest size", () => {
-  assert.deepEqual(titleLayout("CORDINARE", "ATEL"), { size: 48, lines: ["CORDINARE vs ATEL"] });
+  assert.deepEqual(titleLayout("NORTHWIND", "ACME"), { size: 48, lines: ["NORTHWIND vs ACME"] });
 });
 
 test("a long title breaks into name, vs, name", () => {
-  const t = titleLayout("ATEL MARKETING SOLUTIONS", "CORDINARE ENTERPRISE CLOUD");
-  assert.deepEqual(t.lines, ["ATEL MARKETING SOLUTIONS", "vs", "CORDINARE ENTERPRISE CLOUD"]);
+  const t = titleLayout("ACME MARKETING SOLUTIONS", "NORTHWIND ENTERPRISE CLOUD");
+  assert.deepEqual(t.lines, ["ACME MARKETING SOLUTIONS", "vs", "NORTHWIND ENTERPRISE CLOUD"]);
   assert.ok(t.size * 26 <= 960);
 });
 

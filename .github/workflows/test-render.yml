@@ -3,6 +3,12 @@ name: Test render
 # Renders one real fight in local mode (nothing is uploaded to the app) on
 # every PR, so a change to the recorder or the cut is checked against the
 # live page before it runs for real.
+#
+# The fight comes from the dispatch input or the repository variable
+# TEST_MATCH_ID (Settings, Secrets and variables, Actions, Variables), never
+# from this file: the repo is public. Without either, only the unit tests run.
+# Titles are read from the recorded page. Artifacts of a public repo are
+# public, so they are kept for one day only.
 on:
   pull_request:
   workflow_dispatch:
@@ -19,22 +25,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      MATCH: ${{ inputs.match || 'dcdff147-4871-4abc-9b5d-a3c85927f31a' }}
+      MATCH: ${{ inputs.match || vars.TEST_MATCH_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm test
       - name: Chromium and ffmpeg
+        if: env.MATCH != ''
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Render
-        run: TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match "$MATCH"
+        if: env.MATCH != ''
+        run: node render.mjs --match "$MATCH"
       - name: Contact sheets
+        if: env.MATCH != ''
         run: |
           cd "out/$MATCH"
           for f in 16x9 9x16; do
@@ -44,10 +53,11 @@ jobs:
           ffmpeg -v error -y -sseof -0.5 -i 16x9.mp4 -frames:v 1 16x9-last.png
           ffmpeg -v error -y -ss 0.1 -i 9x16.mp4 -frames:v 1 9x16-first.png
           ffmpeg -v error -y -sseof -0.5 -i 9x16.mp4 -frames:v 1 9x16-last.png
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: env.MATCH != ''
         with:
           name: render-${{ env.MATCH }}
           path: |
             out/
             !out/*/rec
-          retention-days: 7
+          retention-days: 1

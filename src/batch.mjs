@@ -6,7 +6,7 @@
 // fight.
 //
 //   # bracket week 1
-//   7fb30586-bf0a-401b-9cfb-90ce8749ee11 | CORDINARE | ATEL
+//   11111111-2222-4333-8444-555555555555 | NORTHWIND | ACME
 //   http://localhost:3000/preview/exhibition/cursor-devin?stage=on | CURSOR | DEVIN
 
 /**
