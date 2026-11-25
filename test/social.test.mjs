@@ -105,7 +105,7 @@ test("buildSocial: a missing 16x9 skips X with a note", needsFfmpeg, () => {
   }
 });
 
-// Shaped like the real recording of 7fb30586… (14.11.2026): the FIGHT word at
+// Shaped like the real recording of 11111111… (14.11.2026): the FIGHT word at
 // 3.3 s, a fighter at 0 HP with the K.O. word at 30.79 s, WINS at 34.11 s.
 const real = {
   tVs: 1000, tEnd: 1035.37,

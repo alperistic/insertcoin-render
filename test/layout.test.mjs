@@ -86,7 +86,7 @@ test("the decided line parses into its rubric and both values, verbatim", () => 
 
 test("the end card model keeps the page's strings and finds the winner", () => {
   const m = endCardModel({
-    cols: [{ name: "Cordinare", total: "2305", win: false }, { name: "insertcoin", total: "2320", win: true }],
+    cols: [{ name: "Northwind", total: "2305", win: false }, { name: "insertcoin", total: "2320", win: true }],
     tiers: ["SPLIT DECISION"],
     cards: "2–1 ON THE CARDS",
     decided: "DECIDED ON VOICE · 8.3 VS 6.3",
@@ -95,7 +95,7 @@ test("the end card model keeps the page's strings and finds the winner", () => {
   assert.equal(m.winner.name, "insertcoin");
   assert.equal(m.winner.total, "2320");
   assert.equal(m.loser.total, "2305");
-  assert.equal(m.cols[0].name, "Cordinare");
+  assert.equal(m.cols[0].name, "Northwind");
   assert.equal(m.tier, "SPLIT DECISION");
   assert.equal(m.cards, "2–1 ON THE CARDS");
   assert.deepEqual(m.decided, { rubric: "VOICE", winner: "8.3", loser: "6.3" });
@@ -135,8 +135,8 @@ test("stage share and even sizes", () => {
 });
 
 test("fitPixel fits one line of the pixel font or gives up below min", () => {
-  assert.equal(fitPixel("ATEL WINS", 960, 72, 32), 72);
-  assert.equal(fitPixel("TTRRECHNER WINS", 960, 72, 32), 64);
+  assert.equal(fitPixel("ACME WINS", 960, 72, 32), 72);
+  assert.equal(fitPixel("INITECHLAB WINS", 960, 72, 32), 64);
   assert.equal(fitPixel("A VERY LONG STARTUP NAME THAT GOES ON WINS", 960, 72, 32), null);
 });
 
@@ -177,13 +177,13 @@ test("the tier reads as the stage says it", () => {
 test("the decided values stand in the totals' column order, the winner's marked", () => {
   // 87c5: the loser on the left, the page writes the winner's value first.
   const right = endCardModel({
-    cols: [{ name: "Cordinare", total: "2305", win: false }, { name: "insertcoin", total: "2320", win: true }],
+    cols: [{ name: "Northwind", total: "2305", win: false }, { name: "insertcoin", total: "2320", win: true }],
     tiers: [], cards: null, decided: "DECIDED ON VOICE · 8.3 VS 6.3", decidedWin: "8.3",
   });
   assert.deepEqual(decidedInColumns(right), [{ value: "6.3", win: false }, { value: "8.3", win: true }]);
   // 7fb3: the winner on the left.
   const left = endCardModel({
-    cols: [{ name: "ATEL", total: "1925", win: true }, { name: "Ttrrechner", total: "1635", win: false }],
+    cols: [{ name: "ACME", total: "1925", win: true }, { name: "Initechlab", total: "1635", win: false }],
     tiers: ["KO"], cards: null, decided: "DECIDED ON PROOF · 6.7 VS 3.0", decidedWin: "6.7",
   });
   assert.deepEqual(decidedInColumns(left), [{ value: "6.7", win: true }, { value: "3.0", win: false }]);

@@ -7,12 +7,12 @@ test("parseBatch: ids, URLs, titles, comments and blank lines", () => {
 
 11111111-2222-4333-8444-555555555555 | NORTHWIND | ACME
 http://localhost:3000/preview/exhibition/cursor-devin?stage=on | CURSOR | DEVIN
-87c5d467-459b-49c7-b4b5-6ea725ada047
+66666666-7777-4888-9999-aaaaaaaaaaaa
 `);
   assert.deepEqual(jobs, [
     { line: 3, matchId: "11111111-2222-4333-8444-555555555555", slug: "11111111-2222-4333-8444-555555555555", title: { a: "NORTHWIND", b: "ACME" } },
     { line: 4, url: "http://localhost:3000/preview/exhibition/cursor-devin?stage=on", slug: "cursor-devin", title: { a: "CURSOR", b: "DEVIN" } },
-    { line: 5, matchId: "87c5d467-459b-49c7-b4b5-6ea725ada047", slug: "87c5d467-459b-49c7-b4b5-6ea725ada047" },
+    { line: 5, matchId: "66666666-7777-4888-9999-aaaaaaaaaaaa", slug: "66666666-7777-4888-9999-aaaaaaaaaaaa" },
   ]);
 });
 
