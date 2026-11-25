@@ -31,7 +31,7 @@ GitHub turns off scheduled workflows in a public repo after 60 days without a co
 ```sh
 npm ci
 npx playwright install chromium
-TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match <match-id>
+TITLE_A=NORTHWIND TITLE_B=ACME node render.mjs --match <match-id>
 ```
 
 This writes `out/<match-id>/16x9.mp4` and `9x16.mp4` (B, both with the end card) without uploading anything. `TITLE_A`/`TITLE_B` are optional: a side left unset takes the name off the recorded page (its HUD's `fname-a`/`fname-b`, challenger left, else the end card's columns; `src/titles.mjs`), upper-case. When neither reads, the cut says FIGHTER A / FIGHTER B and the log warns. All text on the new formats is drawn as PNGs in Chromium (`src/stills.mjs`), with Press Start 2P loaded from `assets/`, so it needs no `drawtext` and no network for fonts. On the runner, the workflow's `npx playwright install --with-deps chromium` (the same Chromium that records) draws them; apt's ffmpeg has `drawtext`, which only the old letterbox uses.
@@ -49,7 +49,7 @@ Records any page that mounts the fight stage like the match page does (same sele
 ### Social kit (`--social`)
 
 ```sh
-TITLE_A=CORDINARE TITLE_B=ATEL node render.mjs --match <match-id> --social
+TITLE_A=NORTHWIND TITLE_B=ACME node render.mjs --match <match-id> --social
 node src/social.mjs out/<match-id> --url https://insertcoin.lol/match/<match-id>   # from a finished render, no recording
 ```
 
@@ -86,7 +86,7 @@ ENDCARD_LINE="AI judges · exhibition · not affiliated" node render.mjs --batch
 
 ```
 # bracket week 1
-7fb30586-bf0a-401b-9cfb-90ce8749ee11 | CORDINARE | ATEL
+11111111-2222-4333-8444-555555555555 | NORTHWIND | ACME
 http://localhost:3000/preview/exhibition/cursor-devin?stage=on | CURSOR | DEVIN
 ```
 
@@ -113,7 +113,7 @@ Since 22.10.2026 the default is B plus the end card. The old cut and candidate A
 To compare everything for one fight:
 
 ```sh
-TITLE_A=ATEL TITLE_B=TTRRECHNER node render.mjs --match <match-id> --candidates
+TITLE_A=ACME TITLE_B=INITECHLAB node render.mjs --match <match-id> --candidates
 ```
 
 This writes `16x9.mp4`, `9x16-a.mp4` and `9x16-b.mp4` with the end card, the letterbox `9x16.mp4` without one (it stays the old cut, for comparison), plus `candidates.json` with the measured layout. Without `drawtext` locally (Homebrew's ffmpeg), the letterbox's text is drawn the same PNG way.
